@@ -49,6 +49,7 @@ declare global {
 
 const GameCanvas: React.FC = () => {
   const tiles = useCityStore((state) => state.tiles);
+  const isPowerOverlay = useCityStore((state) => state.isPowerOverlay);
 
   // Helper to calculate road adjacencies efficiently during render
   const getRoadAdjacency = (x: number, z: number): AdjacencyInfo => {
@@ -94,7 +95,7 @@ const GameCanvas: React.FC = () => {
         />
 
         {/* Environment / Lighting */}
-        <ambientLight intensity={0.7} color="#cbd5e1" />
+        <ambientLight intensity={isPowerOverlay ? 0.4 : 0.7} color="#cbd5e1" />
         <directionalLight 
           position={[50, 80, 30]} 
           intensity={2.5} 
@@ -122,7 +123,7 @@ const GameCanvas: React.FC = () => {
           receiveShadow
         >
           <planeGeometry args={[1000, 1000]} />
-          <meshStandardMaterial color="#4f772d" roughness={0.8} />
+          <meshStandardMaterial color={isPowerOverlay ? "#333333" : "#4f772d"} roughness={0.8} />
         </mesh>
 
         {/* --- RENDERERS --- */}
@@ -147,6 +148,7 @@ const GameCanvas: React.FC = () => {
               ]}
               rotation={tile.rotation}
               adjacencies={adjacencies}
+              isOverlay={isPowerOverlay}
             />
           );
         })}

@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle } from 'lucide-react';
+import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle, Zap } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
 import TenderModal from '../components/TenderModal';
@@ -19,8 +20,13 @@ const GameScreen: React.FC = () => {
   const happiness = useCityStore((state) => state.happiness);
   const insecurity = useCityStore((state) => state.insecurity);
   const corruption = useCityStore((state) => state.corruption);
+  const powerCapacity = useCityStore((state) => state.powerCapacity);
+  const powerDemand = useCityStore((state) => state.powerDemand);
+  const isPowerOverlay = useCityStore((state) => state.isPowerOverlay);
+  
   const activeTool = useCityStore((state) => state.activeTool);
   const setActiveTool = useCityStore((state) => state.setActiveTool);
+  const togglePowerOverlay = useCityStore((state) => state.togglePowerOverlay);
   const runGameTick = useCityStore((state) => state.runGameTick);
   const activeEvent = useCityStore((state) => state.activeEvent);
   const saveGame = useCityStore((state) => state.saveGame);
@@ -67,6 +73,8 @@ const GameScreen: React.FC = () => {
   };
 
   const isLoading = loadingStep < steps.length;
+  const powerUsagePct = powerCapacity > 0 ? Math.round((powerDemand / powerCapacity) * 100) : 0;
+  const isPowerCritical = powerDemand > powerCapacity;
 
   return (
     <div className="h-screen w-screen bg-black relative overflow-hidden">
@@ -130,6 +138,21 @@ const GameScreen: React.FC = () => {
                 <div className="flex flex-col">
                   <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Pop</span>
                   <span className="font-display font-bold text-lg md:text-xl">{population.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="w-px bg-slate-700 my-1"></div>
+
+              {/* Power */}
+              <div className="flex items-center gap-2 md:gap-3 min-w-fit">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isPowerCritical ? 'bg-red-500/20 text-red-500 animate-pulse' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                    <Zap className="w-4 h-4 md:w-5 md:h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Power</span>
+                  <span className={`font-display font-bold text-lg md:text-xl ${isPowerCritical ? 'text-red-400' : 'text-white'}`}>
+                    {powerDemand}/{powerCapacity} <span className="text-xs text-slate-400 font-sans">MW</span>
+                  </span>
                 </div>
               </div>
 
@@ -220,6 +243,18 @@ const GameScreen: React.FC = () => {
           {/* Bottom Bar: Building Tools */}
           <div className="flex flex-col gap-4 pointer-events-auto">
              
+             {/* Power Overlay Toggle */}
+             <div className="self-end">
+                <Button 
+                    size="sm" 
+                    onClick={togglePowerOverlay}
+                    className={`rounded-full px-4 shadow-xl border ${isPowerOverlay ? 'bg-yellow-500 border-yellow-400 text-black' : 'bg-slate-800 border-slate-600 text-slate-300'}`}
+                >
+                    <Zap className="w-4 h-4 mr-2" />
+                    {isPowerOverlay ? 'Power Overlay ON' : 'Show Power Grid'}
+                </Button>
+             </div>
+
              {/* Selected Tool Info Tip */}
              {activeTool && (
                 <div className="self-center bg-slate-900/90 border border-nairobi-yellow/50 px-4 py-2 rounded-lg backdrop-blur text-sm text-nairobi-yellow font-medium animate-in slide-in-from-bottom-2">

@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 
 // Define the types of buildings available
@@ -12,7 +13,8 @@ export type BuildingType =
   | 'jamia_mosque'
   | 'uhuru_park'
   | 'police_station'
-  | 'bar';
+  | 'bar'
+  | 'power_plant';
 
 export type EventType = 'tender_expressway' | null;
 
@@ -24,6 +26,8 @@ export const BUILDING_COSTS: Record<BuildingType, {
   happiness?: number; // Base happiness bonus
   revenue?: number; // Income generated per tick (Tax)
   upkeep?: number; // Cost per tick (Maintenance)
+  powerConsumption?: number; // Power required
+  powerProduction?: number; // Power generated
   description: string;
 }> = {
   'runda_house': { 
@@ -31,7 +35,8 @@ export const BUILDING_COSTS: Record<BuildingType, {
     label: 'Runda House', 
     population: 5,
     revenue: 50,
-    description: 'Low density suburban housing. Generates tax.'
+    powerConsumption: 1,
+    description: 'Low density housing. Needs 1 Power.'
   },
   'kiosk': { 
     cost: 2000, 
@@ -44,7 +49,8 @@ export const BUILDING_COSTS: Record<BuildingType, {
     label: 'Apartment', 
     population: 50,
     revenue: 200,
-    description: 'High density residential. High tax revenue.'
+    powerConsumption: 5,
+    description: 'High density. Needs 5 Power.'
   },
   'acacia': { 
     cost: 1000, 
@@ -99,7 +105,14 @@ export const BUILDING_COSTS: Record<BuildingType, {
     cost: 5000,
     label: 'Club/Bar',
     revenue: 100, // High income
-    description: 'High income. Noise reduces happiness of neighbors.'
+    description: 'High income. Noise reduces happiness.'
+  },
+  'power_plant': {
+    cost: 15000,
+    label: 'Geothermal Plant',
+    upkeep: 400,
+    powerProduction: 50,
+    description: 'Generates 50 Power. High Upkeep.'
   }
 };
 
@@ -118,6 +131,12 @@ interface CityState {
   happiness: number;
   insecurity: number;
   corruption: number;
+  
+  // Power System
+  powerCapacity: number;
+  powerDemand: number;
+  isPowerOverlay: boolean;
+
   tiles: Record<string, TileData>; 
   activeTool: BuildingType | null;
 
@@ -128,6 +147,7 @@ interface CityState {
   
   // Actions
   setActiveTool: (tool: BuildingType | null) => void;
+  togglePowerOverlay: () => void;
   addBuilding: (x: number, z: number, type: BuildingType) => void;
   removeBuilding: (x: number, z: number) => void;
   updateMoney: (amount: number) => void;
@@ -144,6 +164,9 @@ const DEFAULT_STATE = {
   happiness: 50,
   insecurity: 0,
   corruption: 0,
+  powerCapacity: 0,
+  powerDemand: 0,
+  isPowerOverlay: false,
   tiles: {},
   tickCount: 0,
   kickbackRevenue: 0,
@@ -171,6 +194,8 @@ export const useCityStore = create<CityState>((set, get) => ({
   activeEvent: null,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
+  
+  togglePowerOverlay: () => set((state) => ({ isPowerOverlay: !state.isPowerOverlay })),
 
   addBuilding: (x, z, type) => set((state) => {
     const key = `${x},${z}`;
@@ -193,12 +218,12 @@ export const useCityStore = create<CityState>((set, get) => ({
       [key]: { type, x, z, rotation: 0 }
     };
 
-    // Calculate new Population immediately (additive)
-    const newPopulation = state.population + (buildingConfig.population || 0);
+    // Note: Population and Power stats are recalculated in the Game Tick
+    // to ensure consistency, but we can do a quick optimistic update if needed.
+    // For now, we wait for the tick or just update tiles.
     
     return {
       money: state.money - buildingConfig.cost,
-      population: newPopulation,
       tiles: newTiles
     };
   }),
@@ -238,43 +263,53 @@ export const useCityStore = create<CityState>((set, get) => ({
     let totalUpkeep = 0;
     
     let calcCorruption = 0;
-    let calcInsecurity = 0;
     let calcHappiness = 50; // Start with base happiness
-
+    let calcPopulation = 0;
+    
     let policeCount = 0;
     let happinessPenalty = 0;
 
-    // Base Insecurity derived from Population (1 insecurity per 10 people)
-    let baseInsecurity = Math.floor(state.population / 10);
+    let calcPowerCapacity = 0;
+    let calcPowerDemand = 0;
 
+    // 1. First Pass: Calculate Capacity and Demand
+    Object.values(state.tiles).forEach((tile: TileData) => {
+        const config = BUILDING_COSTS[tile.type];
+        if (config.powerProduction) calcPowerCapacity += config.powerProduction;
+        if (config.powerConsumption) calcPowerDemand += config.powerConsumption;
+    });
+
+    const isPowerSufficient = calcPowerCapacity >= calcPowerDemand;
+
+    // 2. Second Pass: Calculate Effects based on Power Status
     Object.values(state.tiles).forEach((tile: TileData) => {
       const config = BUILDING_COSTS[tile.type];
       
-      // 1. Finances
-      if (config.revenue) totalRevenue += config.revenue;
+      const requiresPower = !!config.powerConsumption;
+      const isFunctioning = !requiresPower || (requiresPower && isPowerSufficient);
+
+      // Finances
+      if (isFunctioning && config.revenue) totalRevenue += config.revenue;
       if (config.upkeep) totalUpkeep += config.upkeep;
 
-      // 2. Base Happiness from Buildings (Parks, Mosques)
-      if (config.happiness) calcHappiness += config.happiness;
+      // Population
+      if (isFunctioning && config.population) calcPopulation += config.population;
 
-      // 3. Corruption Calculation
-      if (tile.type === 'kiosk') {
-        calcCorruption += 1;
-      }
+      // Happiness
+      if (isFunctioning && config.happiness) calcHappiness += config.happiness;
 
-      // 4. Police Count
-      if (tile.type === 'police_station') {
-        policeCount += 1;
-      }
+      // Corruption
+      if (tile.type === 'kiosk') calcCorruption += 1;
 
-      // 5. Bar Logic (Noise Pollution)
+      // Police
+      if (tile.type === 'police_station') policeCount += 1;
+
+      // Bar Proximity
       if (tile.type === 'bar') {
-         // Check immediate neighbors (North, South, East, West)
          const neighbors = [
             {x: tile.x + 1, z: tile.z}, {x: tile.x - 1, z: tile.z},
             {x: tile.x, z: tile.z + 1}, {x: tile.x, z: tile.z - 1}
          ];
-         
          let nearHouse = false;
          for (const n of neighbors) {
             const key = `${n.x},${n.z}`;
@@ -284,15 +319,13 @@ export const useCityStore = create<CityState>((set, get) => ({
                 break;
             }
          }
-         
-         if (nearHouse) {
-             happinessPenalty += 1; // Reduces global happiness by 1 per offending bar
-         }
+         if (nearHouse) happinessPenalty += 1;
       }
     });
 
     // Finalize Insecurity (Base - Police Mitigation)
-    calcInsecurity = Math.max(0, baseInsecurity - (policeCount * 5));
+    const baseInsecurity = Math.floor(calcPopulation / 10);
+    const calcInsecurity = Math.max(0, baseInsecurity - (policeCount * 5));
 
     // Finalize Corruption (Bribes + Kiosks)
     const eventCorruption = Math.floor(state.kickbackRevenue / 50); 
@@ -300,6 +333,7 @@ export const useCityStore = create<CityState>((set, get) => ({
 
     // Finalize Happiness
     calcHappiness = calcHappiness - totalCorruption - calcInsecurity - happinessPenalty;
+    if (!isPowerSufficient && calcPowerDemand > 0) calcHappiness -= 20; // Blackout penalty
     calcHappiness = Math.max(0, Math.min(100, calcHappiness));
 
     // Add Kickback Revenue
@@ -317,9 +351,12 @@ export const useCityStore = create<CityState>((set, get) => ({
 
     set({ 
         money: state.money + netIncome,
+        population: calcPopulation,
         happiness: calcHappiness,
         insecurity: calcInsecurity,
         corruption: totalCorruption,
+        powerCapacity: calcPowerCapacity,
+        powerDemand: calcPowerDemand,
         tickCount: newTickCount,
         activeEvent: newEvent
     });
