@@ -128,6 +128,7 @@ const DayNightCycle: React.FC = () => {
 
 const GameCanvas: React.FC = () => {
   const tiles = useCityStore((state) => state.tiles);
+  const activeTool = useCityStore((state) => state.activeTool);
   const isPowerOverlay = useCityStore((state) => state.isPowerOverlay);
 
   // Instanced types are handled by InstancedBuildings.tsx
@@ -152,10 +153,11 @@ const GameCanvas: React.FC = () => {
         />
 
         {/* Controls: Restricted to keep the "City Builder" perspective */}
+        {/* Rotation locked when building to prevent accidental camera moves while tapping */}
         <OrbitControls 
           enablePan={true}
           enableZoom={true}
-          enableRotate={true}
+          enableRotate={!activeTool} 
           minDistance={20}
           maxDistance={150}
           maxPolarAngle={Math.PI / 2.2} // Prevent camera from going under the ground

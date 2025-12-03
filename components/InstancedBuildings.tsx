@@ -1,5 +1,4 @@
 
-
 import React, { useMemo } from 'react';
 import { Instances, Instance } from '@react-three/drei';
 import * as THREE from 'three';
@@ -70,8 +69,10 @@ export const InstancedBuildings: React.FC = () => {
        const cz = t.z * TILE_SIZE + TILE_SIZE/2;
        
        if (hasConnection) {
+          // Hubs raised to 0.13 to clear road base (0.10)
           hubs.push({ x: cx, z: cz });
           
+          // Lines raised to 0.14
           if (n) lines.push({ x: cx, z: cz - 1, rotation: [-Math.PI/2, 0, 0] });
           if (s) lines.push({ x: cx, z: cz + 1, rotation: [-Math.PI/2, 0, 0] });
           if (e) lines.push({ x: cx + 1, z: cz, rotation: [-Math.PI/2, 0, Math.PI/2] });
@@ -145,7 +146,7 @@ export const InstancedBuildings: React.FC = () => {
          {roadHubs.map((h, i) => (
             <Instance 
               key={`road-hub-${i}`}
-              position={[h.x, 0.12, h.z]}
+              position={[h.x, 0.13, h.z]}
               rotation={[-Math.PI/2, 0, 0]}
               color="#fcd116"
             />
@@ -156,7 +157,7 @@ export const InstancedBuildings: React.FC = () => {
          {roadLines.map((l, i) => (
             <Instance 
               key={`road-line-${i}`}
-              position={[l.x, 0.11, l.z]}
+              position={[l.x, 0.14, l.z]}
               rotation={l.rotation as any}
               color="#fcd116"
             />

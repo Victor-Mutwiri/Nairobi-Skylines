@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { BuildingType, useCityStore } from '../store/useCityStore';
 import * as THREE from 'three';
 
@@ -16,6 +16,7 @@ interface BuildingRendererProps {
   rotation?: number; // 0, 1, 2, 3 (multipliers of 90 degrees)
   adjacencies?: AdjacencyInfo;
   isOverlay?: boolean; // Prop to trigger grayscale mode
+  isGhost?: boolean; // Prop for placement preview
 }
 
 export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({ 
@@ -23,52 +24,142 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
   position = [0, 0, 0], 
   rotation = 0,
   adjacencies = { north: false, south: false, east: false, west: false },
-  isOverlay = false
+  isOverlay = false,
+  isGhost = false
 }) => {
   const rotationY = rotation * (Math.PI / 2);
   const isNight = useCityStore(state => state.isNight);
 
-  const getMatColor = (color: string, isUtility: boolean = false) => {
-      if (!isOverlay) return color;
-      if (isUtility) return color; // Keep utilities colored in overlay for visibility
-      return "#64748b"; // Grayscale/Slate for others
-  };
-
-  const getEmissive = (color: string, intensity: number, isUtility: boolean = false) => {
-      if (!isOverlay) {
-          // Normal mode: Emissive if night, or if utility (like Bar/Police lights)
-          if (isUtility) return { emissive: color, emissiveIntensity: intensity };
-          
-          // Night time logic for general buildings
-          if (isNight) return { emissive: color, emissiveIntensity: intensity * 0.5 };
-          
-          return { emissive: "#000000", emissiveIntensity: 0 };
+  // Helper to handle Material Properties for Ghost/Overlay/Normal modes
+  const getMatStyle = (color: string, isUtility: boolean = false, emissiveIntensity: number = 0) => {
+      const props: any = {};
+      
+      // GHOST MODE: Transparent Yellow/Holographic
+      if (isGhost) {
+          props.color = "#FCD116"; // Nairobi Yellow
+          props.transparent = true;
+          props.opacity = 0.6;
+          props.emissive = "#FCD116";
+          props.emissiveIntensity = 0.5;
+          return props;
       }
-      // Overlay mode:
-      if (isUtility) return { emissive: color, emissiveIntensity: intensity };
-      return { emissive: "#000000", emissiveIntensity: 0 };
+
+      // OVERLAY MODE: Grayscale unless utility
+      if (isOverlay) {
+         if (isUtility) {
+             props.color = color;
+             props.emissive = color;
+             props.emissiveIntensity = emissiveIntensity || 0.5;
+         } else {
+             props.color = "#64748b"; // Slate
+             props.emissive = "#000000";
+             props.emissiveIntensity = 0;
+         }
+         return props;
+      }
+
+      // NORMAL MODE
+      props.color = color;
+      
+      // Night Time Emissive Logic
+      if (emissiveIntensity > 0) {
+         // If it has natural emission (lights), use it
+         // Reduce intensity slightly if it's night to make it pop, or 0 if day (unless always on)
+         const effectiveIntensity = isNight ? emissiveIntensity : (isUtility ? emissiveIntensity : 0);
+         props.emissive = color;
+         props.emissiveIntensity = effectiveIntensity;
+      } else {
+          // Standard ambient reflection
+          props.emissive = "#000000";
+          props.emissiveIntensity = 0;
+      }
+
+      return props;
   };
   
   switch (type) {
+    // --- INSTANCED TYPES (Added for Ghost Preview) ---
+    case 'road':
+        return (
+             <group position={position} rotation={[0, rotationY, 0]}>
+                <mesh position={[0, 0.05, 0]}>
+                   <boxGeometry args={[4, 0.1, 4]} />
+                   <meshStandardMaterial {...getMatStyle("#334155")} />
+                </mesh>
+             </group>
+        );
+    case 'runda_house':
+        return (
+            <group position={position} rotation={[0, rotationY, 0]}>
+                <mesh position={[0, 1, 0]}>
+                   <boxGeometry args={[2.5, 2, 2.5]} />
+                   <meshStandardMaterial {...getMatStyle("#f8fafc")} />
+                </mesh>
+                <mesh position={[0, 2.5, 0]} rotation={[0, Math.PI / 4, 0]}>
+                   <coneGeometry args={[2.2, 1.5, 4]} />
+                   <meshStandardMaterial {...getMatStyle("#334155")} />
+                </mesh>
+            </group>
+        );
+    case 'kiosk':
+         return (
+             <group position={position} rotation={[0, rotationY, 0]}>
+                 <mesh position={[0, 0.75, 0]}>
+                    <boxGeometry args={[1.5, 1.5, 1.5]} />
+                    <meshStandardMaterial {...getMatStyle("#16a34a")} />
+                 </mesh>
+                 <mesh position={[0, 1, 0]}>
+                    <boxGeometry args={[1.55, 0.3, 1.55]} />
+                    <meshStandardMaterial {...getMatStyle("#dc2626")} />
+                 </mesh>
+             </group>
+         );
+    case 'apartment':
+        return (
+            <group position={position} rotation={[0, rotationY, 0]}>
+                <mesh position={[0, 3, 0]}>
+                   <boxGeometry args={[2.8, 6, 2.8]} />
+                   <meshStandardMaterial {...getMatStyle("#fef3c7")} />
+                </mesh>
+                <mesh position={[0, 6.1, 0]}>
+                   <boxGeometry args={[3, 0.2, 3]} />
+                   <meshStandardMaterial {...getMatStyle("#78350f")} />
+                </mesh>
+            </group>
+        );
+    case 'acacia':
+        return (
+             <group position={position} rotation={[0, rotationY, 0]}>
+                <mesh position={[0, 1, 0]}>
+                   <cylinderGeometry args={[0.15, 0.15, 2]} />
+                   <meshStandardMaterial {...getMatStyle("#451a03")} />
+                </mesh>
+                <mesh position={[0, 2.2, 0]}>
+                   <cylinderGeometry args={[1.8, 1.8, 0.8]} />
+                   <meshStandardMaterial {...getMatStyle("#3f6212")} />
+                </mesh>
+             </group>
+        );
+
+    // --- UNIQUE TYPES ---
     case 'kicc':
         return (
           <group position={position} rotation={[0, rotationY, 0]}>
             <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
               <boxGeometry args={[3.5, 1, 3.5]} />
-              <meshStandardMaterial color={getMatColor("#92400e")} />
+              <meshStandardMaterial {...getMatStyle("#92400e")} />
             </mesh>
             <mesh position={[0, 4, 0]} castShadow>
               <cylinderGeometry args={[1, 1, 7, 16]} />
-              <meshStandardMaterial color={getMatColor("#b45309")} /> 
+              <meshStandardMaterial {...getMatStyle("#b45309")} /> 
             </mesh>
             <mesh position={[0, 7.5, 0]} castShadow>
               <cylinderGeometry args={[1.8, 0.2, 0.2, 16]} />
-              <meshStandardMaterial color={getMatColor("#78350f")} />
+              <meshStandardMaterial {...getMatStyle("#78350f")} />
             </mesh>
             <mesh position={[0, 8, 0]}>
               <cylinderGeometry args={[0.1, 0.1, 1, 8]} />
-              {/* Helipad lights up slightly at night */}
-              <meshStandardMaterial color={getMatColor("#475569")} {...getEmissive("#ffffff", isNight ? 0.2 : 0, false)} />
+              <meshStandardMaterial {...getMatStyle("#475569", false, isNight ? 0.2 : 0)} />
             </mesh>
           </group>
         );
@@ -78,12 +169,11 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
           <group position={position} rotation={[0, rotationY, 0]}>
             <mesh position={[0.2, 5, 0]} castShadow receiveShadow>
               <boxGeometry args={[2, 10, 2]} />
-              <meshStandardMaterial color={getMatColor("#94a3b8")} metalness={0.5} roughness={0.2} />
+              <meshStandardMaterial {...getMatStyle("#94a3b8")} metalness={0.5} roughness={0.2} />
             </mesh>
             <mesh position={[-1, 5, 0]} castShadow>
               <boxGeometry args={[0.5, 10.5, 1.5]} />
-              {/* Spine lights up white at night */}
-              <meshStandardMaterial color={getMatColor("#ffffff")} {...getEmissive("#ffffff", isNight ? 0.8 : 0, false)} />
+              <meshStandardMaterial {...getMatStyle("#ffffff", false, isNight ? 0.8 : 0)} />
             </mesh>
           </group>
         );
@@ -93,19 +183,19 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
           <group position={position} rotation={[0, rotationY, 0]}>
             <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
               <boxGeometry args={[3, 3, 3]} />
-              <meshStandardMaterial color={getMatColor("#f1f5f9")} />
+              <meshStandardMaterial {...getMatStyle("#f1f5f9")} />
             </mesh>
             <mesh position={[0, 3, 0]} castShadow>
               <sphereGeometry args={[1.2, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-              <meshStandardMaterial color={getMatColor("#15803d")} />
+              <meshStandardMaterial {...getMatStyle("#15803d")} />
             </mesh>
             <mesh position={[1.3, 2.5, 1.3]} castShadow>
               <cylinderGeometry args={[0.2, 0.2, 5, 8]} />
-              <meshStandardMaterial color={getMatColor("#f1f5f9")} />
+              <meshStandardMaterial {...getMatStyle("#f1f5f9")} />
             </mesh>
             <mesh position={[-1.3, 2.5, 1.3]} castShadow>
               <cylinderGeometry args={[0.2, 0.2, 5, 8]} />
-              <meshStandardMaterial color={getMatColor("#f1f5f9")} />
+              <meshStandardMaterial {...getMatStyle("#f1f5f9")} />
             </mesh>
           </group>
         );
@@ -115,19 +205,19 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
           <group position={position} rotation={[0, rotationY, 0]}>
             <mesh position={[0, 0.1, 0]} receiveShadow>
               <boxGeometry args={[4, 0.2, 4]} />
-              <meshStandardMaterial color={getMatColor("#4d7c0f")} />
+              <meshStandardMaterial {...getMatStyle("#4d7c0f")} />
             </mesh>
             <mesh position={[0.5, 0.15, -0.5]} rotation={[-Math.PI / 2, 0, 0]}>
                <planeGeometry args={[2, 2]} />
-               <meshStandardMaterial color={getMatColor("#0ea5e9")} metalness={0.1} roughness={0.1} />
+               <meshStandardMaterial {...getMatStyle("#0ea5e9")} metalness={0.1} roughness={0.1} />
             </mesh>
             <mesh position={[-1, 0.5, 1]}>
                <cylinderGeometry args={[0.1, 0.1, 0.8, 8]} />
-               <meshStandardMaterial color={getMatColor("#3f6212")} />
+               <meshStandardMaterial {...getMatStyle("#3f6212")} />
             </mesh>
             <mesh position={[-1, 1, 1]}>
                <coneGeometry args={[0.5, 1, 8]} />
-               <meshStandardMaterial color={getMatColor("#3f6212")} />
+               <meshStandardMaterial {...getMatStyle("#3f6212")} />
             </mesh>
           </group>
         );
@@ -137,23 +227,23 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
           <group position={position} rotation={[0, rotationY, 0]}>
              <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
                 <boxGeometry args={[3, 3, 2]} />
-                <meshStandardMaterial color={getMatColor("#f8fafc")} />
+                <meshStandardMaterial {...getMatStyle("#f8fafc")} />
              </mesh>
              <mesh position={[0, 1.5, 1.05]}>
                 <boxGeometry args={[3.1, 0.5, 0.1]} />
-                <meshStandardMaterial color={getMatColor("#2563eb")} />
+                <meshStandardMaterial {...getMatStyle("#2563eb")} />
              </mesh>
              <mesh position={[0, 2.5, 1.05]}>
                 <boxGeometry args={[1, 0.5, 0.1]} />
-                <meshStandardMaterial color={getMatColor("#1e3a8a")} />
+                <meshStandardMaterial {...getMatStyle("#1e3a8a")} />
              </mesh>
              <mesh position={[-1, 3.1, 0]}>
                 <boxGeometry args={[0.5, 0.2, 0.5]} />
-                <meshStandardMaterial color="#dc2626" {...getEmissive("#dc2626", 0.8, true)} />
+                <meshStandardMaterial {...getMatStyle("#dc2626", true, 0.8)} />
              </mesh>
              <mesh position={[1, 3.1, 0]}>
                 <boxGeometry args={[0.5, 0.2, 0.5]} />
-                <meshStandardMaterial color="#2563eb" {...getEmissive("#2563eb", 0.8, true)} />
+                <meshStandardMaterial {...getMatStyle("#2563eb", true, 0.8)} />
              </mesh>
           </group>
         );
@@ -164,21 +254,21 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
                 {/* Main Body */}
                 <mesh position={[0, 1.25, 0]} castShadow receiveShadow>
                     <boxGeometry args={[3, 2.5, 3]} />
-                    <meshStandardMaterial color={getMatColor("#b91c1c", true)} />
+                    <meshStandardMaterial {...getMatStyle("#b91c1c", true)} />
                 </mesh>
                 {/* Garage Door */}
                 <mesh position={[0, 1, 1.51]}>
                     <planeGeometry args={[2, 1.8]} />
-                    <meshStandardMaterial color={getMatColor("#4b5563", true)} />
+                    <meshStandardMaterial {...getMatStyle("#4b5563", true)} />
                 </mesh>
                 {/* Siren */}
                 <mesh position={[0, 2.6, 0]}>
                     <cylinderGeometry args={[0.3, 0.4, 0.4, 8]} />
-                    <meshStandardMaterial color="#ef4444" {...getEmissive("#ef4444", 1, true)} />
+                    <meshStandardMaterial {...getMatStyle("#ef4444", true, 1)} />
                 </mesh>
                  <mesh position={[0, 2.8, 0]}>
                     <sphereGeometry args={[0.3]} />
-                    <meshStandardMaterial color="#fca5a5" {...getEmissive("#fca5a5", 1, true)} />
+                    <meshStandardMaterial {...getMatStyle("#fca5a5", true, 1)} />
                 </mesh>
             </group>
         );
@@ -188,19 +278,19 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
           <group position={position} rotation={[0, rotationY, 0]}>
              <mesh position={[0, 1.25, 0]} castShadow receiveShadow>
                 <boxGeometry args={[2.5, 2.5, 2.5]} />
-                <meshStandardMaterial color={getMatColor("#1e1b4b")} />
+                <meshStandardMaterial {...getMatStyle("#1e1b4b")} />
              </mesh>
              <mesh position={[0, 2.5, 0]}>
                 <boxGeometry args={[2.6, 0.1, 2.6]} />
-                <meshStandardMaterial color={getMatColor("#d8b4fe")} {...getEmissive("#a855f7", 1, true)} />
+                <meshStandardMaterial {...getMatStyle("#d8b4fe", true, 1)} />
              </mesh>
              <mesh position={[0, 0.8, 1.3]}>
                 <boxGeometry args={[1, 1.6, 0.1]} />
-                <meshStandardMaterial color={getMatColor("#000000")} />
+                <meshStandardMaterial {...getMatStyle("#000000")} />
              </mesh>
              <mesh position={[0, 1.7, 1.35]}>
                 <boxGeometry args={[1.2, 0.1, 0.1]} />
-                <meshStandardMaterial color={getMatColor("#f0abfc")} {...getEmissive("#e879f9", 2, true)} />
+                <meshStandardMaterial {...getMatStyle("#f0abfc", true, 2)} />
              </mesh>
           </group>
         );
@@ -211,32 +301,32 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
              {/* Base Platform - Industrial Dark */}
              <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
                 <boxGeometry args={[3.8, 1, 3.8]} />
-                <meshStandardMaterial color={getMatColor("#374151", true)} />
+                <meshStandardMaterial {...getMatStyle("#374151", true)} />
              </mesh>
              {/* Main Reactor Building */}
              <mesh position={[-1, 2, -1]} castShadow>
                 <boxGeometry args={[1.5, 3, 1.5]} />
-                <meshStandardMaterial color={getMatColor("#4b5563", true)} />
+                <meshStandardMaterial {...getMatStyle("#4b5563", true)} />
              </mesh>
              {/* Smokestack 1 */}
              <mesh position={[1, 3, 1]}>
                 <cylinderGeometry args={[0.4, 0.6, 6, 16]} />
-                <meshStandardMaterial color={getMatColor("#9ca3af", true)} />
+                <meshStandardMaterial {...getMatStyle("#9ca3af", true)} />
              </mesh>
              {/* Smokestack 1 Rim */}
              <mesh position={[1, 5.8, 1]}>
                 <cylinderGeometry args={[0.5, 0.5, 0.4, 16]} />
-                <meshStandardMaterial color={getMatColor("#dc2626", true)} {...getEmissive("#dc2626", 0.5, true)} />
+                <meshStandardMaterial {...getMatStyle("#dc2626", true, 0.5)} />
              </mesh>
              {/* Smokestack 2 */}
              <mesh position={[1, 2.5, -1]}>
                  <cylinderGeometry args={[0.3, 0.5, 5, 16]} />
-                 <meshStandardMaterial color={getMatColor("#9ca3af", true)} />
+                 <meshStandardMaterial {...getMatStyle("#9ca3af", true)} />
              </mesh>
              {/* Pipes */}
              <mesh position={[0, 1.5, 0]} rotation={[0,0,Math.PI/2]}>
                  <cylinderGeometry args={[0.2, 0.2, 3]} />
-                 <meshStandardMaterial color={getMatColor("#fbbf24", true)} />
+                 <meshStandardMaterial {...getMatStyle("#fbbf24", true)} />
              </mesh>
           </group>
         );
@@ -247,32 +337,32 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
             {/* Ground (Dirt/Mud) */}
             <mesh position={[0, 0.1, 0]} receiveShadow>
                <boxGeometry args={[3.8, 0.2, 3.8]} />
-               <meshStandardMaterial color={getMatColor("#57534e", true)} />
+               <meshStandardMaterial {...getMatStyle("#57534e", true)} />
             </mesh>
             {/* Trash Pile 1 */}
             <mesh position={[-0.5, 0.8, -0.5]} castShadow>
                <coneGeometry args={[1.5, 1.5, 6]} />
-               <meshStandardMaterial color={getMatColor("#44403c", true)} flatShading />
+               <meshStandardMaterial {...getMatStyle("#44403c", true)} flatShading />
             </mesh>
             {/* Trash Pile 2 */}
             <mesh position={[1, 0.6, 1]} castShadow>
                <coneGeometry args={[1, 1.2, 5]} />
-               <meshStandardMaterial color={getMatColor("#78716c", true)} flatShading />
+               <meshStandardMaterial {...getMatStyle("#78716c", true)} flatShading />
             </mesh>
             {/* Debris Bits */}
             <mesh position={[0, 0.3, 1.5]}>
                <boxGeometry args={[0.5, 0.5, 0.5]} />
-               <meshStandardMaterial color={getMatColor("#3b82f6", true)} />
+               <meshStandardMaterial {...getMatStyle("#3b82f6", true)} />
             </mesh>
             <mesh position={[1.2, 0.3, -1]}>
                <boxGeometry args={[0.4, 0.4, 0.4]} />
-               <meshStandardMaterial color={getMatColor("#ef4444", true)} />
+               <meshStandardMaterial {...getMatStyle("#ef4444", true)} />
             </mesh>
             {/* Fence Posts */}
             {[[-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8], [1.8, 1.8]].map((pos, i) => (
                 <mesh key={i} position={[pos[0], 0.5, pos[1]]}>
                     <boxGeometry args={[0.2, 1, 0.2]} />
-                    <meshStandardMaterial color={getMatColor("#713f12", true)} />
+                    <meshStandardMaterial {...getMatStyle("#713f12", true)} />
                 </mesh>
             ))}
           </group>
@@ -284,33 +374,33 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
                 {/* Mud Base */}
                 <mesh position={[0, 0.05, 0]} receiveShadow>
                    <boxGeometry args={[3.8, 0.1, 3.8]} />
-                   <meshStandardMaterial color={getMatColor("#78350f")} />
+                   <meshStandardMaterial {...getMatStyle("#78350f")} />
                 </mesh>
                 
                 {/* Shack 1 */}
                 <mesh position={[-1, 0.5, -1]} castShadow rotation={[0, 0.1, 0]}>
                    <boxGeometry args={[1.5, 1, 1.5]} />
-                   <meshStandardMaterial color={getMatColor("#7f1d1d")} />
+                   <meshStandardMaterial {...getMatStyle("#7f1d1d")} />
                 </mesh>
                 <mesh position={[-1, 1.05, -1]} rotation={[0, 0.1, 0.1]}>
                    <boxGeometry args={[1.6, 0.1, 1.6]} />
-                   <meshStandardMaterial color={getMatColor("#713f12")} />
+                   <meshStandardMaterial {...getMatStyle("#713f12")} />
                 </mesh>
 
                 {/* Shack 2 */}
                 <mesh position={[1.2, 0.4, 0.8]} castShadow rotation={[0, -0.2, 0]}>
                    <boxGeometry args={[1.2, 0.8, 1.8]} />
-                   <meshStandardMaterial color={getMatColor("#374151")} />
+                   <meshStandardMaterial {...getMatStyle("#374151")} />
                 </mesh>
                 <mesh position={[1.2, 0.85, 0.8]} rotation={[0, -0.2, -0.1]}>
                    <boxGeometry args={[1.3, 0.1, 2]} />
-                   <meshStandardMaterial color={getMatColor("#92400e")} />
+                   <meshStandardMaterial {...getMatStyle("#92400e")} />
                 </mesh>
 
                 {/* Shack 3 */}
                 <mesh position={[0.5, 0.4, -1.2]} castShadow rotation={[0, 0.3, 0]}>
                    <boxGeometry args={[1, 0.8, 1]} />
-                   <meshStandardMaterial color={getMatColor("#57534e")} />
+                   <meshStandardMaterial {...getMatStyle("#57534e")} />
                 </mesh>
             </group>
         );
@@ -324,26 +414,26 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
             {/* Main Tower Block */}
             <mesh position={[0, 6, 0]} castShadow receiveShadow>
               <boxGeometry args={[5, 12, 5]} />
-              <meshStandardMaterial color={getMatColor("#065f46")} metalness={0.6} roughness={0.1} />
+              <meshStandardMaterial {...getMatStyle("#065f46")} metalness={0.6} roughness={0.1} />
             </mesh>
             {/* Gold Accents */}
             <mesh position={[2.6, 6, 0]}>
                <boxGeometry args={[0.2, 12, 1]} />
-               <meshStandardMaterial color={getMatColor("#fbbf24")} metalness={1} roughness={0.2} {...getEmissive("#fbbf24", isNight ? 0.3 : 0, true)} />
+               <meshStandardMaterial {...getMatStyle("#fbbf24", true, isNight ? 0.3 : 0)} metalness={1} roughness={0.2} />
             </mesh>
             <mesh position={[-2.6, 6, 0]}>
                <boxGeometry args={[0.2, 12, 1]} />
-               <meshStandardMaterial color={getMatColor("#fbbf24")} metalness={1} roughness={0.2} {...getEmissive("#fbbf24", isNight ? 0.3 : 0, true)} />
+               <meshStandardMaterial {...getMatStyle("#fbbf24", true, isNight ? 0.3 : 0)} metalness={1} roughness={0.2} />
             </mesh>
             {/* Top Crown */}
             <mesh position={[0, 12.5, 0]}>
                <boxGeometry args={[5.2, 1, 5.2]} />
-               <meshStandardMaterial color={getMatColor("#047857")} />
+               <meshStandardMaterial {...getMatStyle("#047857")} />
             </mesh>
             {/* Antenna */}
             <mesh position={[0, 14, 0]}>
                <cylinderGeometry args={[0.1, 0.2, 3]} />
-               <meshStandardMaterial color="#ef4444" {...getEmissive("#ef4444", 1, true)} />
+               <meshStandardMaterial {...getMatStyle("#ef4444", true, 1)} />
             </mesh>
           </group>
         );

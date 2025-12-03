@@ -1,26 +1,26 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCityStore } from '../store/useCityStore';
+import { BuildingRenderer } from './BuildingRenderer';
 
 // Grid Configuration
 export const TILE_SIZE = 4; // Physical size of one tile in the world
 export const GRID_SIZE = 20; // Number of tiles along one axis (20x20 grid)
 
 export const GridSystem: React.FC = () => {
-  const cursorRef = useRef<THREE.Mesh>(null);
-  
   const activeTool = useCityStore((state) => state.activeTool);
   const addBuilding = useCityStore((state) => state.addBuilding);
   const removeBuilding = useCityStore((state) => state.removeBuilding);
+
+  // Use State for rendering the Ghost Building
+  const [hoveredTile, setHoveredTile] = useState<{ x: number, z: number } | null>(null);
 
   // Handle Mouse Movement (Hover Effect)
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation(); // Stop raycast from hitting the ground plane below
     
-    if (!cursorRef.current) return;
-
     // Convert world intersection point to grid indices
     const xIndex = Math.floor(e.point.x / TILE_SIZE);
     const zIndex = Math.floor(e.point.z / TILE_SIZE);
@@ -36,25 +36,12 @@ export const GridSystem: React.FC = () => {
       zIndex < halfGrid;
 
     if (isValidTile) {
-      cursorRef.current.visible = true;
-      // Snap to tile center
-      cursorRef.current.position.set(
-        xIndex * TILE_SIZE + TILE_SIZE / 2,
-        0.1, // Slightly elevated to prevent z-fighting with grid/ground
-        zIndex * TILE_SIZE + TILE_SIZE / 2
-      );
-      
-      // Visual feedback: Green if tool is active, White if inspecting, Red if bulldozer
-      if (activeTool === 'bulldozer') {
-        (cursorRef.current.material as THREE.MeshBasicMaterial).color.set('#ef4444');
-      } else if (activeTool) {
-        (cursorRef.current.material as THREE.MeshBasicMaterial).color.set('#4ade80');
-      } else {
-        (cursorRef.current.material as THREE.MeshBasicMaterial).color.set('white');
-      }
-
+       // Only update state if tile changed to avoid React trashing
+       if (!hoveredTile || hoveredTile.x !== xIndex || hoveredTile.z !== zIndex) {
+           setHoveredTile({ x: xIndex, z: zIndex });
+       }
     } else {
-      cursorRef.current.visible = false;
+       if (hoveredTile) setHoveredTile(null);
     }
   };
 
@@ -62,31 +49,17 @@ export const GridSystem: React.FC = () => {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     
-    const xIndex = Math.floor(e.point.x / TILE_SIZE);
-    const zIndex = Math.floor(e.point.z / TILE_SIZE);
-    
-    const halfGrid = GRID_SIZE / 2;
-    const isValidTile = 
-      xIndex >= -halfGrid && 
-      xIndex < halfGrid && 
-      zIndex >= -halfGrid && 
-      zIndex < halfGrid;
-
-    if (isValidTile) {
-      console.log(`Grid Clicked: [${xIndex}, ${zIndex}]`);
-      
+    if (hoveredTile) {
       if (activeTool === 'bulldozer') {
-        removeBuilding(xIndex, zIndex);
+        removeBuilding(hoveredTile.x, hoveredTile.z);
       } else if (activeTool) {
-        addBuilding(xIndex, zIndex, activeTool);
+        addBuilding(hoveredTile.x, hoveredTile.z, activeTool);
       }
     }
   };
 
   const handlePointerLeave = () => {
-    if (cursorRef.current) {
-      cursorRef.current.visible = false;
-    }
+    setHoveredTile(null);
   };
 
   return (
@@ -113,15 +86,30 @@ export const GridSystem: React.FC = () => {
         <meshBasicMaterial visible={false} />
       </mesh>
 
-      {/* Ghost Cursor (The Highlight) */}
-      <mesh 
-        ref={cursorRef} 
-        rotation={[-Math.PI / 2, 0, 0]} 
-        visible={false}
-      >
-        <planeGeometry args={[TILE_SIZE * 0.9, TILE_SIZE * 0.9]} />
-        <meshBasicMaterial color="white" transparent opacity={0.3} side={THREE.DoubleSide} />
-      </mesh>
+      {/* GHOST PREVIEW / CURSOR */}
+      {hoveredTile && (
+        <group position={[
+            hoveredTile.x * TILE_SIZE + TILE_SIZE / 2,
+            0.1,
+            hoveredTile.z * TILE_SIZE + TILE_SIZE / 2
+        ]}>
+            {activeTool && activeTool !== 'bulldozer' ? (
+                // 3D Ghost Building
+                <BuildingRenderer type={activeTool} isGhost />
+            ) : (
+                // Simple Cursor for Inspection / Bulldozer
+                <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                    <planeGeometry args={[TILE_SIZE * 0.9, TILE_SIZE * 0.9]} />
+                    <meshBasicMaterial 
+                        color={activeTool === 'bulldozer' ? '#ef4444' : 'white'} 
+                        transparent 
+                        opacity={0.3} 
+                        side={THREE.DoubleSide} 
+                    />
+                </mesh>
+            )}
+        </group>
+      )}
     </group>
   );
 };
