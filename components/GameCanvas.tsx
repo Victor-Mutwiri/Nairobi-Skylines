@@ -55,6 +55,7 @@ const DayNightCycle: React.FC = () => {
   
   const dirLight = useRef<THREE.DirectionalLight>(null);
   const ambientLight = useRef<THREE.AmbientLight>(null);
+  const fogRef = useRef<THREE.Fog>(null);
   const [sunPos, setSunPos] = useState<[number, number, number]>([50, 80, 30]);
 
   useFrame(({ clock }) => {
@@ -71,13 +72,17 @@ const DayNightCycle: React.FC = () => {
     const z = Math.cos(angle) * radius * 0.5;
     const x = Math.cos(angle) * radius * 0.5 + 50;
 
+    // Determine Day/Night Intensity Factor (0 to 1)
+    // Used for interpolation
+    const intensityFactor = Math.max(0, Math.sin(angle));
+
     if (dirLight.current) {
         dirLight.current.position.set(x, y, z);
         
         // Intensity mapping
         // Noon (y=100) -> High intensity
         // Night (y<0) -> Zero intensity
-        const intensity = Math.max(0, Math.sin(angle) * 2.5);
+        const intensity = intensityFactor * 2.5;
         dirLight.current.intensity = intensity;
         
         // Update Color based on time (Golden hour vs White noon)
@@ -90,8 +95,7 @@ const DayNightCycle: React.FC = () => {
 
     // Set Night State
     const isNightNow = y < 0;
-    // We update store infrequently to avoid React thrashing, though useCityStore uses selectors efficiently
-    // Doing a check to only dispatch on change
+    // We update store infrequently to avoid React thrashing
     if (useCityStore.getState().isNight !== isNightNow) {
         setIsNight(isNightNow);
     }
@@ -114,6 +118,21 @@ const DayNightCycle: React.FC = () => {
              ambientLight.current.color.setHex(0xffffff);
         }
     }
+
+    // Fog Logic - Simulate Nairobi Air Quality
+    if (fogRef.current) {
+       if (isPowerOverlay) {
+          // Dark fog for overlay mode to highlight grid
+          fogRef.current.color.setHex(0x111827); 
+       } else {
+          const dayColor = new THREE.Color("#C4B5A5"); // Brownish-Grey (Dusty/Smoggy)
+          const nightColor = new THREE.Color("#0f172a"); // Dark Slate (Night)
+          
+          // Interpolate fog color based on sun height/intensity
+          // Smooth transition
+          fogRef.current.color.lerpColors(nightColor, dayColor, intensityFactor);
+       }
+    }
   });
 
   return (
@@ -134,8 +153,11 @@ const DayNightCycle: React.FC = () => {
         <orthographicCamera attach="shadow-camera" args={[-100, 100, 100, -100]} />
       </directionalLight>
       
+      {/* Dynamic Fog for atmosphere and edge masking */}
+      <fog ref={fogRef} attach="fog" args={['#C4B5A5', 30, 140]} />
+
       {/* Sky changes with Sun Position */}
-      <Sky sunPosition={sunPos} turbidity={0.5} rayleigh={0.5} mieCoefficient={0.005} />
+      <Sky sunPosition={sunPos} turbidity={10} rayleigh={0.5} mieCoefficient={0.05} mieDirectionalG={0.8} />
       <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
     </>
   );
@@ -191,9 +213,6 @@ const GameCanvas: React.FC = () => {
         {/* Dynamic Lighting System */}
         <DayNightCycle />
         
-        {/* Fog for depth and to hide chunk edges */}
-        <fog attach="fog" args={['#87CEEB', 30, 180]} />
-
         {/* The Ground */}
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
