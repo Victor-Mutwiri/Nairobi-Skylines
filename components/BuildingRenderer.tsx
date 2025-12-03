@@ -338,6 +338,43 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
           </group>
         );
 
+    case 'informal_settlement':
+        return (
+            <group position={position} rotation={[0, rotationY, 0]}>
+                {/* Mud Base */}
+                <mesh position={[0, 0.05, 0]} receiveShadow>
+                   <boxGeometry args={[3.8, 0.1, 3.8]} />
+                   <meshStandardMaterial color={getMatColor("#78350f")} />
+                </mesh>
+                
+                {/* Shack 1 */}
+                <mesh position={[-1, 0.5, -1]} castShadow rotation={[0, 0.1, 0]}>
+                   <boxGeometry args={[1.5, 1, 1.5]} />
+                   <meshStandardMaterial color={getMatColor("#7f1d1d")} />
+                </mesh>
+                <mesh position={[-1, 1.05, -1]} rotation={[0, 0.1, 0.1]}>
+                   <boxGeometry args={[1.6, 0.1, 1.6]} />
+                   <meshStandardMaterial color={getMatColor("#713f12")} />
+                </mesh>
+
+                {/* Shack 2 */}
+                <mesh position={[1.2, 0.4, 0.8]} castShadow rotation={[0, -0.2, 0]}>
+                   <boxGeometry args={[1.2, 0.8, 1.8]} />
+                   <meshStandardMaterial color={getMatColor("#374151")} />
+                </mesh>
+                <mesh position={[1.2, 0.85, 0.8]} rotation={[0, -0.2, -0.1]}>
+                   <boxGeometry args={[1.3, 0.1, 2]} />
+                   <meshStandardMaterial color={getMatColor("#92400e")} />
+                </mesh>
+
+                {/* Shack 3 */}
+                <mesh position={[0.5, 0.4, -1.2]} castShadow rotation={[0, 0.3, 0]}>
+                   <boxGeometry args={[1, 0.8, 1]} />
+                   <meshStandardMaterial color={getMatColor("#57534e")} />
+                </mesh>
+            </group>
+        );
+
     default:
       return null;
   }

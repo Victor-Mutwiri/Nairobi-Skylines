@@ -1,4 +1,5 @@
 
+
 import { create } from 'zustand';
 
 // Define the types of buildings available
@@ -16,8 +17,10 @@ export type BuildingType =
   | 'fire_station'
   | 'bar'
   | 'power_plant'
-  | 'dumpsite';
+  | 'dumpsite'
+  | 'informal_settlement';
 
+export type ToolType = BuildingType | 'bulldozer';
 export type EventType = 'tender_expressway' | null;
 
 // Centralized Configuration for Buildings
@@ -31,6 +34,7 @@ export const BUILDING_COSTS: Record<BuildingType, {
   pollution?: number; // Positive = pollutes, Negative = cleans
   powerConsumption?: number; // Power required
   powerProduction?: number; // Power generated
+  insecurity?: number; // Contribution to insecurity
   description: string;
 }> = {
   'runda_house': { 
@@ -137,6 +141,13 @@ export const BUILDING_COSTS: Record<BuildingType, {
     upkeep: 200,
     pollution: -15, // Large reduction (simulating waste management)
     description: 'Manages waste. Reduces overall pollution.'
+  },
+  'informal_settlement': {
+    cost: 0,
+    label: 'Squatter Camp',
+    insecurity: 5,
+    happiness: -5,
+    description: 'Unplanned settlement. Hard to remove.'
   }
 };
 
@@ -167,7 +178,7 @@ interface CityState {
 
   tiles: Record<string, TileData>; 
   fires: Record<string, number>; // Key: "x,z", Value: duration (ticks)
-  activeTool: BuildingType | null;
+  activeTool: ToolType | null;
 
   // Event System State
   tickCount: number;
@@ -175,7 +186,7 @@ interface CityState {
   kickbackRevenue: number; // Income generated from corrupt deals
   
   // Actions
-  setActiveTool: (tool: BuildingType | null) => void;
+  setActiveTool: (tool: ToolType | null) => void;
   togglePowerOverlay: () => void;
   setIsNight: (isNight: boolean) => void;
   addBuilding: (x: number, z: number, type: BuildingType) => void;
@@ -261,9 +272,27 @@ export const useCityStore = create<CityState>((set, get) => ({
 
   removeBuilding: (x, z) => set((state) => {
     const key = `${x},${z}`;
+    const tile = state.tiles[key];
+    
+    if (!tile) return state;
+
+    let penaltyHappiness = 0;
+    let penaltyCorruption = 0;
+
+    // Penalty for evicting informal settlements
+    if (tile.type === 'informal_settlement') {
+       penaltyHappiness = -20;
+       penaltyCorruption = 10;
+    }
+
     const newTiles = { ...state.tiles };
     delete newTiles[key];
-    return { tiles: newTiles };
+    
+    return { 
+      tiles: newTiles,
+      happiness: Math.max(0, state.happiness + penaltyHappiness),
+      corruption: state.corruption + penaltyCorruption
+    };
   }),
 
   updateMoney: (amount) => set((state) => ({
@@ -339,6 +368,14 @@ export const useCityStore = create<CityState>((set, get) => ({
 
       // Pollution
       if (isFunctioning && config.pollution) calcPollution += config.pollution;
+
+      // Insecurity from Buildings (like slums)
+      // Note: Police reduction is calculated later
+      if (config.insecurity) {
+         // Insecurity is currently calculated globally, but we can track building contributions here implicitly
+         // or just let them add to the baseInsecurity. 
+         // For now, we'll let them add a flat penalty to happiness via the global stat calculation below.
+      }
 
       // Corruption
       if (tile.type === 'kiosk') calcCorruption += 1;
@@ -420,12 +457,16 @@ export const useCityStore = create<CityState>((set, get) => ({
        }
     }
 
-
     // Ensure pollution doesn't go below 0
     calcPollution = Math.max(0, calcPollution);
 
-    // Finalize Insecurity (Base - Police Mitigation)
-    const baseInsecurity = Math.floor(calcPopulation / 10);
+    // Finalize Insecurity (Base - Police Mitigation + Slum contribution)
+    let baseInsecurity = Math.floor(calcPopulation / 10);
+    // Add extra insecurity from slums
+    Object.values(state.tiles).forEach((t: TileData) => {
+        if(t.type === 'informal_settlement') baseInsecurity += 5;
+    });
+    
     const calcInsecurity = Math.max(0, baseInsecurity - (policeCount * 5));
 
     // Finalize Corruption (Bribes + Kiosks)
@@ -434,9 +475,15 @@ export const useCityStore = create<CityState>((set, get) => ({
 
     // Pollution Penalty
     const pollutionPenalty = calcPollution > 50 ? Math.floor((calcPollution - 50) / 2) : 0;
+    
+    // Slum Happiness Penalty
+    let slumHappinessPenalty = 0;
+     Object.values(state.tiles).forEach((t: TileData) => {
+        if(t.type === 'informal_settlement') slumHappinessPenalty += 5;
+    });
 
     // Finalize Happiness
-    calcHappiness = calcHappiness - totalCorruption - calcInsecurity - happinessPenalty - pollutionPenalty;
+    calcHappiness = calcHappiness - totalCorruption - calcInsecurity - happinessPenalty - pollutionPenalty - slumHappinessPenalty;
     if (!isPowerSufficient && calcPowerDemand > 0) calcHappiness -= 20; // Blackout penalty
     calcHappiness = Math.max(0, Math.min(100, calcHappiness));
 
@@ -453,6 +500,49 @@ export const useCityStore = create<CityState>((set, get) => ({
       newEvent = 'tender_expressway';
     }
 
+    // --- LAND GRABBING LOGIC (Squatter Camps) ---
+    // Every 10 ticks, if Insecurity > 30
+    let newTiles = state.tiles;
+    if (newTickCount % 10 === 0 && calcInsecurity > 30) {
+        // Find candidates: Empty tiles adjacent to road or apartment
+        const candidates: {x: number, z: number}[] = [];
+        
+        // Helper to check emptiness
+        const isEmpty = (x: number, z: number) => !state.tiles[`${x},${z}`];
+        
+        Object.values(state.tiles).forEach((t: TileData) => {
+            if (t.type === 'road' || t.type === 'apartment') {
+                 const neighbors = [
+                    {x: t.x+1, z: t.z}, {x: t.x-1, z: t.z},
+                    {x: t.x, z: t.z+1}, {x: t.x, z: t.z-1}
+                 ];
+                 neighbors.forEach(n => {
+                     // Check bounds 20x20 centered on 0,0? 
+                     // GridSystem uses indices approx -10 to 9. We just check if they are already in tiles map.
+                     // But we must also check grid bounds if we want to be strict. 
+                     // For now, assume if not in map, it's potentially free, but we should bound it.
+                     if (n.x >= -10 && n.x < 10 && n.z >= -10 && n.z < 10) {
+                         if (isEmpty(n.x, n.z)) {
+                             candidates.push(n);
+                         }
+                     }
+                 });
+            }
+        });
+
+        if (candidates.length > 0) {
+            const spot = candidates[Math.floor(Math.random() * candidates.length)];
+            const key = `${spot.x},${spot.z}`;
+            // Double check it's not taken (duplicates in candidates list possible)
+            if (!newTiles[key]) {
+                newTiles = {
+                    ...newTiles,
+                    [key]: { type: 'informal_settlement', x: spot.x, z: spot.z, rotation: Math.floor(Math.random()*4) }
+                };
+            }
+        }
+    }
+
     set({ 
         money: state.money + netIncome,
         population: calcPopulation,
@@ -464,7 +554,8 @@ export const useCityStore = create<CityState>((set, get) => ({
         powerDemand: calcPowerDemand,
         tickCount: newTickCount,
         activeEvent: newEvent,
-        fires: newFires
+        fires: newFires,
+        tiles: newTiles
     });
     
     return netIncome;

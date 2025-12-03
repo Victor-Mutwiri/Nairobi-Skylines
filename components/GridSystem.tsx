@@ -39,6 +39,7 @@ export const GridSystem: React.FC = () => {
   
   const activeTool = useCityStore((state) => state.activeTool);
   const addBuilding = useCityStore((state) => state.addBuilding);
+  const removeBuilding = useCityStore((state) => state.removeBuilding);
 
   // Handle Mouse Movement (Hover Effect)
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
@@ -69,8 +70,10 @@ export const GridSystem: React.FC = () => {
         zIndex * TILE_SIZE + TILE_SIZE / 2
       );
       
-      // Visual feedback: Green if tool is active, White if inspecting
-      if (activeTool) {
+      // Visual feedback: Green if tool is active, White if inspecting, Red if bulldozer
+      if (activeTool === 'bulldozer') {
+        (cursorRef.current.material as THREE.MeshBasicMaterial).color.set('#ef4444');
+      } else if (activeTool) {
         (cursorRef.current.material as THREE.MeshBasicMaterial).color.set('#4ade80');
       } else {
         (cursorRef.current.material as THREE.MeshBasicMaterial).color.set('white');
@@ -98,7 +101,9 @@ export const GridSystem: React.FC = () => {
     if (isValidTile) {
       console.log(`Grid Clicked: [${xIndex}, ${zIndex}]`);
       
-      if (activeTool) {
+      if (activeTool === 'bulldozer') {
+        removeBuilding(xIndex, zIndex);
+      } else if (activeTool) {
         addBuilding(xIndex, zIndex, activeTool);
       }
     }

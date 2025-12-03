@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle, Zap, Trash2 } from 'lucide-react';
+import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle, Zap, Trash2, Hammer } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
 import TenderModal from '../components/TenderModal';
@@ -270,10 +270,16 @@ const GameScreen: React.FC = () => {
              </div>
 
              {/* Selected Tool Info Tip */}
-             {activeTool && (
+             {activeTool && activeTool !== 'bulldozer' && (
                 <div className="self-center bg-slate-900/90 border border-nairobi-yellow/50 px-4 py-2 rounded-lg backdrop-blur text-sm text-nairobi-yellow font-medium animate-in slide-in-from-bottom-2">
-                   Active Tool: {BUILDING_COSTS[activeTool].label} (KES {BUILDING_COSTS[activeTool].cost.toLocaleString()})
-                   <span className="block text-xs text-slate-400 font-normal mt-1">{BUILDING_COSTS[activeTool].description}</span>
+                   Active Tool: {BUILDING_COSTS[activeTool as BuildingType].label} (KES {BUILDING_COSTS[activeTool as BuildingType].cost.toLocaleString()})
+                   <span className="block text-xs text-slate-400 font-normal mt-1">{BUILDING_COSTS[activeTool as BuildingType].description}</span>
+                </div>
+             )}
+              {activeTool === 'bulldozer' && (
+                 <div className="self-center bg-red-900/90 border border-red-500 px-4 py-2 rounded-lg backdrop-blur text-sm text-white font-medium animate-in slide-in-from-bottom-2">
+                   Active Tool: Demolish
+                   <span className="block text-xs text-red-200 font-normal mt-1">Click buildings to remove them. Evicting slums causes backlash!</span>
                 </div>
              )}
 
@@ -291,7 +297,22 @@ const GameScreen: React.FC = () => {
                     
                     <div className="w-px bg-slate-700 mx-1 h-8 self-center"></div>
 
-                    {(Object.keys(BUILDING_COSTS) as BuildingType[]).map((type) => {
+                     {/* Bulldozer Tool */}
+                    <button
+                        onClick={() => setActiveTool(activeTool === 'bulldozer' ? null : 'bulldozer')}
+                        className={`
+                            relative group flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all duration-200 border-2 min-w-[5rem]
+                            ${activeTool === 'bulldozer'
+                                ? 'bg-red-600 border-red-500 text-white scale-105 shadow-lg shadow-red-500/20' 
+                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:border-slate-600'
+                            }
+                        `}
+                    >
+                        <Hammer className="w-6 h-6 mb-1" />
+                        <span className="text-[10px] font-bold uppercase leading-none">Demolish</span>
+                    </button>
+
+                    {(Object.keys(BUILDING_COSTS) as BuildingType[]).filter(t => t !== 'informal_settlement').map((type) => {
                         const config = BUILDING_COSTS[type];
                         const isActive = activeTool === type;
                         const canAfford = money >= config.cost;
