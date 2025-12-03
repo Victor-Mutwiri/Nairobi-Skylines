@@ -1,8 +1,9 @@
 
+
 import React, { useMemo } from 'react';
 import { Instances, Instance } from '@react-three/drei';
 import * as THREE from 'three';
-import { useCityStore, TileData } from '../store/useCityStore';
+import { useCityStore, TileData, BUILDING_COSTS } from '../store/useCityStore';
 import { TILE_SIZE } from './GridSystem';
 
 // Reusable Geometries
@@ -67,28 +68,17 @@ export const InstancedBuildings: React.FC = () => {
        
        const cx = t.x * TILE_SIZE + TILE_SIZE/2;
        const cz = t.z * TILE_SIZE + TILE_SIZE/2;
-       const yLine = 0.11;
-       const yHub = 0.12;
        
        if (hasConnection) {
           hubs.push({ x: cx, z: cz });
           
-          // NOTE: PlaneGeometry(0.2, 2) is aligned with local Y-axis by default.
-          // Rotating -90deg on X lays it flat along Z-axis (North-South).
-          
           if (n) lines.push({ x: cx, z: cz - 1, rotation: [-Math.PI/2, 0, 0] });
           if (s) lines.push({ x: cx, z: cz + 1, rotation: [-Math.PI/2, 0, 0] });
-          
-          // Rotate Z 90deg to make it East-West
-          // Order is Euler XYZ. X(-90) -> Y becomes Z. Z(90) rotates around local Z (which is now World Up?).
-          // Let's stick to simple transforms:
-          // X: -PI/2 puts Y-axis along -Z. 
-          // If we add Z: PI/2, it rotates the plane in its local frame.
           if (e) lines.push({ x: cx + 1, z: cz, rotation: [-Math.PI/2, 0, Math.PI/2] });
           if (w) lines.push({ x: cx - 1, z: cz, rotation: [-Math.PI/2, 0, Math.PI/2] });
 
        } else {
-          // Isolated road - Faint line visual (just a vertical line for now)
+          // Isolated road
           lines.push({ x: cx, z: cz, rotation: [-Math.PI/2, 0, 0] });
        }
     });
@@ -97,81 +87,93 @@ export const InstancedBuildings: React.FC = () => {
   }, [roads]);
 
   // Overlay Logic Helper
-  // If overlay is ON:
-  // - Unpowered residential -> RED 
-  // - Powered residential -> Normal color
-  // - Other stuff -> Gray
-  const isPowered = powerCapacity >= powerDemand;
+  const isGlobalPowerSufficient = powerCapacity >= powerDemand;
   const overlayGray = '#64748b'; // Slate 500
 
-  const getColor = (defaultColor: string, isResidential: boolean) => {
+  const getColor = (defaultColor: string, tile: TileData) => {
     if (!isPowerOverlay) return defaultColor;
     
-    if (isResidential) {
-        if (!isPowered) return '#dc2626'; // Red warning
-        return defaultColor; // Normal color if powered
+    const config = BUILDING_COSTS[tile.type];
+    if (!config) return overlayGray;
+
+    const requiresPower = !!config.powerConsumption;
+    
+    // 1. Power Check: Needs power + Global Capacity + Local Connection
+    if (requiresPower) {
+         // Default to true if undefined (newly placed)
+         const isGridConnected = tile.isPowered !== false; 
+         
+         if (!isGlobalPowerSufficient || !isGridConnected) {
+             return '#dc2626'; // RED: Unpowered
+         }
     }
     
-    return overlayGray; // Gray out everything else
+    // 2. Road Check: Needs road + has access
+    // Trees don't need roads
+    if (tile.type !== 'acacia' && tile.type !== 'road' && tile.hasRoadAccess === false) {
+         return '#f97316'; // ORANGE: No Road Access
+    }
+
+    // 3. Functional: Return normal color (or slightly dimmed)
+    if (requiresPower || tile.type === 'road' || config.population) {
+        return defaultColor; 
+    }
+    
+    return overlayGray; 
   };
 
-  const roadColor = getColor("#334155", false);
-  const markColor = getColor("#fcd116", false);
+  const roadColor = (t: TileData) => getColor("#334155", t);
+  const markColor = (t: TileData) => getColor("#fcd116", t);
 
   // Window Logic: Visible only at night and if powered
-  const showWindows = isNight && isPowered;
+  const showWindows = isNight && isGlobalPowerSufficient; // Fast check for visual only
 
   return (
     <group>
-      {/* --- ROADS (High Performance Instancing) --- */}
-      {/* 1. Base Asphalt */}
+      {/* --- ROADS --- */}
       <Instances range={1000} geometry={roadBaseGeo} material={whiteMat}>
         {roads.map((t) => (
            <Instance 
              key={`road-base-${t.x}-${t.z}`}
              position={[t.x * TILE_SIZE + TILE_SIZE / 2, 0.05, t.z * TILE_SIZE + TILE_SIZE / 2]}
-             color={roadColor}
+             color={roadColor(t)}
            />
         ))}
       </Instances>
       
-      {/* 2. Center Hubs (for junctions) */}
       <Instances range={1000} geometry={roadHubGeo} material={whiteMat}>
          {roadHubs.map((h, i) => (
             <Instance 
               key={`road-hub-${i}`}
               position={[h.x, 0.12, h.z]}
               rotation={[-Math.PI/2, 0, 0]}
-              color={markColor}
+              color="#fcd116"
             />
          ))}
       </Instances>
 
-      {/* 3. Road Lines */}
       <Instances range={4000} geometry={roadLineGeo} material={whiteMat}>
          {roadLines.map((l, i) => (
             <Instance 
               key={`road-line-${i}`}
               position={[l.x, 0.11, l.z]}
               rotation={l.rotation as any}
-              color={markColor}
+              color="#fcd116"
             />
          ))}
       </Instances>
 
       {/* --- RUNDA HOUSES --- */}
-      {/* Body: White Box */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
         {houses.map((t) => (
           <Instance
             key={`house-body-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 1, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[2.5, 2, 2.5]}
-            color={getColor("#f8fafc", true)}
+            color={getColor("#f8fafc", t)}
           />
         ))}
       </Instances>
-      {/* Roof: Grey Cone */}
       <Instances range={1000} geometry={coneGeo} material={whiteMat}>
         {houses.map((t) => (
           <Instance
@@ -179,23 +181,21 @@ export const InstancedBuildings: React.FC = () => {
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 2.5, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[2.2, 1.5, 2.2]}
             rotation={[0, Math.PI / 4, 0]}
-            color={getColor("#334155", true)}
+            color={getColor("#334155", t)}
           />
         ))}
       </Instances>
-       {/* Door: Dark Grey Box */}
        <Instances range={1000} geometry={boxGeo} material={whiteMat}>
         {houses.map((t) => (
           <Instance
             key={`house-door-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 0.5, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.3]}
             scale={[0.6, 1, 0.1]}
-            color={getColor("#475569", true)}
+            color={getColor("#475569", t)}
           />
         ))}
       </Instances>
       
-      {/* House Windows (Lit at Night) */}
       {showWindows && (
         <Instances range={1000} geometry={boxGeo} material={windowMat}>
             {houses.map((t) => (
@@ -210,71 +210,63 @@ export const InstancedBuildings: React.FC = () => {
 
 
       {/* --- KIOSKS --- */}
-      {/* Body: Green Box */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
         {kiosks.map((t) => (
           <Instance
             key={`kiosk-body-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 0.75, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[1.5, 1.5, 1.5]}
-            color={getColor("#16a34a", false)}
+            color={getColor("#16a34a", t)}
           />
         ))}
       </Instances>
-      {/* Stripe: Red Box */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
         {kiosks.map((t) => (
           <Instance
             key={`kiosk-stripe-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 1, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[1.55, 0.3, 1.55]}
-            color={getColor("#dc2626", false)}
+            color={getColor("#dc2626", t)}
           />
         ))}
       </Instances>
 
 
       {/* --- APARTMENTS --- */}
-      {/* Body: Cream Box */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
         {apartments.map((t) => (
           <Instance
             key={`apt-body-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 3, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[2.8, 6, 2.8]}
-            color={getColor("#fef3c7", true)}
+            color={getColor("#fef3c7", t)}
           />
         ))}
       </Instances>
-      {/* Roof Edge: Brown Box */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
         {apartments.map((t) => (
           <Instance
             key={`apt-roof-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 6.1, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[3, 0.2, 3]}
-            color={getColor("#78350f", true)}
+            color={getColor("#78350f", t)}
           />
         ))}
       </Instances>
       
-      {/* Apartment Windows (Lit at Night) */}
       {showWindows && (
         <Instances range={3000} geometry={boxGeo} material={windowMat}>
             {apartments.flatMap((t) => [
-                // Front Row Top
                 <Instance
                     key={`apt-win-1-${t.x}-${t.z}`}
                     position={[t.x * TILE_SIZE + TILE_SIZE / 2, 5, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.45]}
                     scale={[2, 0.8, 0.1]}
                 />,
-                // Front Row Mid
                 <Instance
                     key={`apt-win-2-${t.x}-${t.z}`}
                     position={[t.x * TILE_SIZE + TILE_SIZE / 2, 3, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.45]}
                     scale={[2, 0.8, 0.1]}
                 />,
-                // Front Row Low
                 <Instance
                     key={`apt-win-3-${t.x}-${t.z}`}
                     position={[t.x * TILE_SIZE + TILE_SIZE / 2, 1, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.45]}
@@ -286,25 +278,23 @@ export const InstancedBuildings: React.FC = () => {
 
 
       {/* --- TREES --- */}
-      {/* Trunk: Brown Cylinder */}
       <Instances range={1000} geometry={cylinderGeo} material={whiteMat}>
         {trees.map((t) => (
           <Instance
             key={`tree-trunk-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 1, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[0.15, 2, 0.15]}
-            color={getColor("#451a03", false)}
+            color={getColor("#451a03", t)}
           />
         ))}
       </Instances>
-      {/* Canopy: Green Cylinder */}
       <Instances range={1000} geometry={cylinderGeo} material={whiteMat}>
         {trees.map((t) => (
           <Instance
             key={`tree-canopy-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 2.2, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[1.8, 0.8, 1.8]}
-            color={getColor("#3f6212", false)}
+            color={getColor("#3f6212", t)}
           />
         ))}
       </Instances>

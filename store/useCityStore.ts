@@ -178,6 +178,10 @@ export interface TileData {
   rotation: number;
   parentX?: number; // For multi-tile buildings (reserved tiles point to main)
   parentZ?: number;
+  
+  // Connectivity Logic
+  hasRoadAccess?: boolean;
+  isPowered?: boolean;
 }
 
 export interface HighScore {
@@ -292,14 +296,12 @@ export const useCityStore = create<CityState>((set, get) => ({
     const tilesToOccupy: string[] = [];
 
     // Grid boundary check and Occupancy check
-    // Assuming grid indices are roughly -10 to 9. We check if key exists.
     for (let dx = 0; dx < width; dx++) {
       for (let dz = 0; dz < depth; dz++) {
         const checkX = x + dx;
         const checkZ = z + dz;
         const key = `${checkX},${checkZ}`;
         
-        // Bounds check (Hardcoded 20x20 centered on 0, limits -10 to 9)
         if (checkX < -10 || checkX >= 10 || checkZ < -10 || checkZ >= 10) {
              return state; // Out of bounds
         }
@@ -315,7 +317,14 @@ export const useCityStore = create<CityState>((set, get) => ({
     const newTiles = { ...state.tiles };
 
     // Main Tile
-    newTiles[`${x},${z}`] = { type, x, z, rotation: 0 };
+    newTiles[`${x},${z}`] = { 
+        type, 
+        x, 
+        z, 
+        rotation: 0,
+        hasRoadAccess: true, // Optimistic init, verified in next tick
+        isPowered: true 
+    };
 
     // Reserved (Filler) Tiles
     for (let dx = 0; dx < width; dx++) {
@@ -352,7 +361,7 @@ export const useCityStore = create<CityState>((set, get) => ({
     if (tile.type === 'reserved' && tile.parentX !== undefined && tile.parentZ !== undefined) {
         const parentKey = `${tile.parentX},${tile.parentZ}`;
         tile = state.tiles[parentKey];
-        if (!tile) return state; // Should not happen
+        if (!tile) return state; 
     }
 
     let penaltyHappiness = 0;
@@ -409,12 +418,12 @@ export const useCityStore = create<CityState>((set, get) => ({
   }),
 
   runGameTick: () => {
-    const state = get();
+    const state: CityState = get();
     let totalRevenue = 0;
     let totalUpkeep = 0;
     
     let calcCorruption = 0;
-    let calcHappiness = 50; // Start with base happiness
+    let calcHappiness = 50; 
     let calcPopulation = 0;
     let calcPollution = 0;
     
@@ -427,9 +436,50 @@ export const useCityStore = create<CityState>((set, get) => ({
 
     const tileKeys = Object.keys(state.tiles);
 
-    // 1. First Pass: Calculate Capacity and Demand
+    // --- GRID CONNECTIVITY ANALYSIS (BFS) ---
+    // 1. Identify Network Nodes (Roads and Power Plants)
+    const roadKeys = new Set<string>();
+    const powerSourceKeys: string[] = [];
+    
+    Object.values(state.tiles).forEach(t => {
+        const key = `${t.x},${t.z}`;
+        if (t.type === 'road') roadKeys.add(key);
+        if (t.type === 'power_plant') powerSourceKeys.push(key);
+    });
+
+    // 2. BFS Power Propagation
+    const poweredNetwork = new Set<string>();
+    const bfsQueue: string[] = [];
+
+    // Initialize with Power Plants
+    powerSourceKeys.forEach(key => {
+        poweredNetwork.add(key);
+        bfsQueue.push(key);
+    });
+
+    // Run BFS (Electricity follows Roads)
+    while(bfsQueue.length > 0) {
+        const currentKey = bfsQueue.shift()!;
+        const [cx, cz] = currentKey.split(',').map(Number);
+        
+        const neighbors = [
+            `${cx+1},${cz}`, `${cx-1},${cz}`, `${cx},${cz+1}`, `${cx},${cz-1}`
+        ];
+
+        for(const nKey of neighbors) {
+            if(!poweredNetwork.has(nKey)) {
+                // Power flows through Roads
+                if(roadKeys.has(nKey)) {
+                    poweredNetwork.add(nKey);
+                    bfsQueue.push(nKey);
+                }
+            }
+        }
+    }
+
+    // 3. Update Tile Status & Calculate Capacity
     Object.values(state.tiles).forEach((tile: TileData) => {
-        if (tile.type === 'reserved') return; // Skip fillers
+        if (tile.type === 'reserved') return; 
 
         const config = BUILDING_COSTS[tile.type];
         if (config.powerProduction) calcPowerCapacity += config.powerProduction;
@@ -440,19 +490,85 @@ export const useCityStore = create<CityState>((set, get) => ({
         }
     });
 
-    const isPowerSufficient = calcPowerCapacity >= calcPowerDemand;
+    // Global Capacity Check
+    const isPowerCapacitySufficient = calcPowerCapacity >= calcPowerDemand;
 
-    // 2. Second Pass: Calculate Effects based on Power Status
+    // Track state changes to avoid unnecessary re-renders if nothing changed
+    let tilesChanged = false;
+    const newTilesMap = { ...state.tiles };
+
+    // 4. Evaluate Buildings based on Connectivity
     Object.values(state.tiles).forEach((tile: TileData) => {
-      if (tile.type === 'reserved') return; // Skip fillers
+      if (tile.type === 'reserved') return;
 
       const config = BUILDING_COSTS[tile.type];
+      const width = config.width || 1;
+      const depth = config.depth || 1;
       
+      let hasRoadAccess = false;
+      let hasPowerAccess = false;
+
+      // Check perimeter for Roads and Powered Nodes
+      for(let dx = 0; dx < width; dx++) {
+        for(let dz = 0; dz < depth; dz++) {
+            const tx = tile.x + dx;
+            const tz = tile.z + dz;
+            const neighbors = [
+                `${tx+1},${tz}`, `${tx-1},${tz}`, `${tx},${tz+1}`, `${tx},${tz-1}`
+            ];
+
+            for(const nKey of neighbors) {
+                const nTile = state.tiles[nKey];
+                if (nTile) {
+                    if (nTile.type === 'road') {
+                        hasRoadAccess = true;
+                        if (poweredNetwork.has(nKey)) {
+                            hasPowerAccess = true;
+                        }
+                    }
+                    if (nTile.type === 'power_plant') {
+                         hasPowerAccess = true; 
+                    }
+                }
+            }
+        }
+      }
+
+      // Self-check for Infrastructure
+      if (tile.type === 'road') {
+         hasRoadAccess = true;
+         hasPowerAccess = poweredNetwork.has(`${tile.x},${tile.z}`);
+      }
+      if (tile.type === 'power_plant') {
+         hasPowerAccess = true; // Source
+      }
+      
+      // Update Tile Data if status changed
+      if (tile.hasRoadAccess !== hasRoadAccess || tile.isPowered !== hasPowerAccess) {
+          tilesChanged = true;
+          newTilesMap[`${tile.x},${tile.z}`] = {
+              ...tile,
+              hasRoadAccess,
+              isPowered: hasPowerAccess
+          };
+      }
+
+      // --- GAMEPLAY IMPACT CALCULATION ---
       const requiresPower = !!config.powerConsumption;
-      const isFunctioning = !requiresPower || (requiresPower && isPowerSufficient);
+      // Some buildings don't need roads (Trees, Slums, etc.)
+      const needsRoad = tile.type !== 'acacia' && tile.type !== 'informal_settlement' && tile.type !== 'road'; 
+      
+      const effectiveRoadAccess = needsRoad ? hasRoadAccess : true;
+
+      // A building functions if:
+      // 1. It has Road Access (if required)
+      // 2. It has Power (if required) - Requires both Local Grid connection AND Global Capacity
+      const isFunctioning = effectiveRoadAccess && (!requiresPower || (requiresPower && isPowerCapacitySufficient && hasPowerAccess));
 
       // Finances
       if (isFunctioning && config.revenue) totalRevenue += config.revenue;
+      
+      // Upkeep is paid regardless of functionality (simulating wasted budget)
       if (config.upkeep) totalUpkeep += config.upkeep;
 
       // Population
@@ -464,22 +580,23 @@ export const useCityStore = create<CityState>((set, get) => ({
       // Pollution
       if (isFunctioning && config.pollution) calcPollution += config.pollution;
 
-      // Insecurity from Buildings (like slums)
-      // Note: Police reduction is calculated later
-      if (config.insecurity) {
-         // Insecurity is currently calculated globally, but we can track building contributions here implicitly
-         // or just let them add to the baseInsecurity. 
-         // For now, we'll let them add a flat penalty to happiness via the global stat calculation below.
+      // Penalties for Broken Services
+      if (!effectiveRoadAccess && needsRoad) {
+           // Abandonment Penalty (minor happiness hit per disconnected building)
+           // If it's a house, big hit.
+           if (config.population) happinessPenalty += 1;
+      }
+      if (effectiveRoadAccess && requiresPower && (!hasPowerAccess || !isPowerCapacitySufficient)) {
+           // Blackout Penalty
+           if (config.population) happinessPenalty += 2;
       }
 
-      // Corruption
-      if (tile.type === 'kiosk') calcCorruption += 1;
-
-      // Police
-      if (tile.type === 'police_station') policeCount += 1;
+      // Corruption & Police
+      if (tile.type === 'kiosk' && isFunctioning) calcCorruption += 1;
+      if (tile.type === 'police_station' && isFunctioning) policeCount += 1;
 
       // Bar Proximity
-      if (tile.type === 'bar') {
+      if (tile.type === 'bar' && isFunctioning) {
          const neighbors = [
             {x: tile.x + 1, z: tile.z}, {x: tile.x - 1, z: tile.z},
             {x: tile.x, z: tile.z + 1}, {x: tile.x, z: tile.z - 1}
@@ -501,16 +618,14 @@ export const useCityStore = create<CityState>((set, get) => ({
     let newFires = { ...state.fires };
     let emergencyCost = 0;
 
-    // 1. Extinguish / Update existing fires
     Object.keys(newFires).forEach(key => {
       const [fxStr, fzStr] = key.split(',');
       const fx = parseInt(fxStr);
       const fz = parseInt(fzStr);
       
-      // Check if near any fire station (Radius 3)
       let extinguished = false;
       for (const station of fireStations) {
-        const dist = Math.abs(station.x - fx) + Math.abs(station.z - fz); // Manhattan distance
+        const dist = Math.abs(station.x - fx) + Math.abs(station.z - fz); 
         if (dist <= 3) {
           extinguished = true;
           break;
@@ -521,74 +636,60 @@ export const useCityStore = create<CityState>((set, get) => ({
         delete newFires[key];
         emergencyCost += 1000;
       } else {
-        // Fire continues
-        newFires[key] += 1; // Increment duration
-        happinessPenalty += 2; // Fire makes people unhappy
+        newFires[key] += 1; 
+        happinessPenalty += 2; 
 
-        // Spread logic: If burnt for > 2 ticks, try spread
         if (newFires[key] > 2) {
-           const neighbors = [
+           const neighbors: {x: number, z: number}[] = [
             {x: fx+1, z: fz}, {x: fx-1, z: fz}, {x: fx, z: fz+1}, {x: fx, z: fz-1}
            ];
            const randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
            const nKey = `${randomNeighbor.x},${randomNeighbor.z}`;
            
-           // If neighbor has a building and is not already burning
-           const t = state.tiles[nKey];
+           const t = state.tiles[nKey] as TileData | undefined;
            if (t && !newFires[nKey] && t.type !== 'road' && t.type !== 'reserved') {
-              newFires[nKey] = 0; // Ignite neighbor
+              newFires[nKey] = 0; 
            }
         }
       }
     });
 
-    // 2. Random Ignition (5% chance every 5 ticks)
+    // Random Ignition
     if (state.tickCount % 5 === 0 && Math.random() < 0.05 && tileKeys.length > 0) {
-       // Pick random tile
        const randomKey = tileKeys[Math.floor(Math.random() * tileKeys.length)];
        const tile = state.tiles[randomKey];
-       // Roads, fillers, and empty spots don't burn easily
        if (tile.type !== 'road' && tile.type !== 'reserved' && !newFires[randomKey]) {
           newFires[randomKey] = 0;
        }
     }
 
-    // Ensure pollution doesn't go below 0
     calcPollution = Math.max(0, calcPollution);
 
-    // Finalize Insecurity (Base - Police Mitigation + Slum contribution)
     let baseInsecurity = Math.floor(calcPopulation / 10);
-    // Add extra insecurity from slums
     Object.values(state.tiles).forEach((t: TileData) => {
         if(t.type === 'informal_settlement') baseInsecurity += 5;
     });
     
     const calcInsecurity = Math.max(0, baseInsecurity - (policeCount * 5));
 
-    // Finalize Corruption (Bribes + Kiosks)
     const eventCorruption = Math.floor(state.kickbackRevenue / 50); 
     const totalCorruption = calcCorruption + eventCorruption;
 
-    // Pollution Penalty
     const pollutionPenalty = calcPollution > 50 ? Math.floor((calcPollution - 50) / 2) : 0;
     
-    // Slum Happiness Penalty
     let slumHappinessPenalty = 0;
      Object.values(state.tiles).forEach((t: TileData) => {
         if(t.type === 'informal_settlement') slumHappinessPenalty += 5;
     });
 
-    // Finalize Happiness
     calcHappiness = calcHappiness - totalCorruption - calcInsecurity - happinessPenalty - pollutionPenalty - slumHappinessPenalty;
-    if (!isPowerSufficient && calcPowerDemand > 0) calcHappiness -= 20; // Blackout penalty
+    if (!isPowerCapacitySufficient && calcPowerDemand > 0) calcHappiness -= 20; 
     calcHappiness = Math.max(0, Math.min(100, calcHappiness));
 
-    // Add Kickback Revenue
     totalRevenue += state.kickbackRevenue;
 
     const netIncome = totalRevenue - totalUpkeep - emergencyCost;
     
-    // Event Trigger Logic
     const newTickCount = state.tickCount + 1;
     let newEvent = state.activeEvent;
     
@@ -596,25 +697,20 @@ export const useCityStore = create<CityState>((set, get) => ({
       newEvent = 'tender_expressway';
     }
 
-    // --- LAND GRABBING LOGIC (Squatter Camps) ---
-    // Every 10 ticks, if Insecurity > 30
-    let newTiles = state.tiles;
+    // --- LAND GRABBING LOGIC ---
+    let finalTiles = tilesChanged ? newTilesMap : state.tiles;
+
     if (newTickCount % 10 === 0 && calcInsecurity > 30) {
-        // Find candidates: Empty tiles adjacent to road or apartment
         const candidates: {x: number, z: number}[] = [];
+        const isEmpty = (x: number, z: number) => !finalTiles[`${x},${z}`];
         
-        // Helper to check emptiness
-        const isEmpty = (x: number, z: number) => !state.tiles[`${x},${z}`];
-        
-        Object.values(state.tiles).forEach((t: TileData) => {
+        Object.values(finalTiles).forEach((t: TileData) => {
             if (t.type === 'road' || t.type === 'apartment') {
                  const neighbors = [
                     {x: t.x+1, z: t.z}, {x: t.x-1, z: t.z},
                     {x: t.x, z: t.z+1}, {x: t.x, z: t.z-1}
                  ];
                  neighbors.forEach(n => {
-                     // Check bounds 20x20 centered on 0,0? 
-                     // GridSystem uses indices approx -10 to 9. We just check if they are already in tiles map.
                      if (n.x >= -10 && n.x < 10 && n.z >= -10 && n.z < 10) {
                          if (isEmpty(n.x, n.z)) {
                              candidates.push(n);
@@ -627,10 +723,9 @@ export const useCityStore = create<CityState>((set, get) => ({
         if (candidates.length > 0) {
             const spot = candidates[Math.floor(Math.random() * candidates.length)];
             const key = `${spot.x},${spot.z}`;
-            // Double check it's not taken (duplicates in candidates list possible)
-            if (!newTiles[key]) {
-                newTiles = {
-                    ...newTiles,
+            if (!finalTiles[key]) {
+                finalTiles = {
+                    ...finalTiles,
                     [key]: { type: 'informal_settlement', x: spot.x, z: spot.z, rotation: Math.floor(Math.random()*4) }
                 };
             }
@@ -649,7 +744,7 @@ export const useCityStore = create<CityState>((set, get) => ({
         tickCount: newTickCount,
         activeEvent: newEvent,
         fires: newFires,
-        tiles: newTiles
+        tiles: finalTiles
     });
     
     return netIncome;
