@@ -3,10 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, Settings, Pause } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
+import { useCityStore } from '../store/useCityStore';
 
 const GameScreen: React.FC = () => {
   const navigate = useNavigate();
   const [loadingStep, setLoadingStep] = useState(0);
+  
+  // Connect to store
+  const money = useCityStore((state) => state.money);
+  const population = useCityStore((state) => state.population);
 
   const steps = [
     "Initializing Low Poly Engine...",
@@ -70,12 +75,12 @@ const GameScreen: React.FC = () => {
             <div className="bg-slate-900/90 backdrop-blur border border-slate-700 p-3 rounded-xl flex gap-4 text-white shadow-xl">
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400 uppercase tracking-wider">Balance</span>
-                <span className="text-nairobi-yellow font-display font-bold text-xl">KES 5,000,000</span>
+                <span className="text-nairobi-yellow font-display font-bold text-xl">KES {money.toLocaleString()}</span>
               </div>
                <div className="w-px bg-slate-700"></div>
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400 uppercase tracking-wider">Population</span>
-                <span className="font-display font-bold text-xl">0</span>
+                <span className="font-display font-bold text-xl">{population.toLocaleString()}</span>
               </div>
             </div>
 
