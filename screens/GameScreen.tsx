@@ -9,6 +9,8 @@ import { useCityStore, BUILDING_COSTS, BuildingType } from '../store/useCityStor
 const GameScreen: React.FC = () => {
   const navigate = useNavigate();
   const [loadingStep, setLoadingStep] = useState(0);
+  const [incomeNotification, setIncomeNotification] = useState<{ amount: number; id: number } | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
   
   // Connect to store
   const money = useCityStore((state) => state.money);
@@ -16,6 +18,7 @@ const GameScreen: React.FC = () => {
   const happiness = useCityStore((state) => state.happiness);
   const activeTool = useCityStore((state) => state.activeTool);
   const setActiveTool = useCityStore((state) => state.setActiveTool);
+  const runGameTick = useCityStore((state) => state.runGameTick);
 
   const steps = [
     "Initializing Low Poly Engine...",
@@ -34,6 +37,22 @@ const GameScreen: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [loadingStep, steps.length]);
+
+  // Game Loop: Ticks every 5 seconds (1 Game Day)
+  useEffect(() => {
+    if (loadingStep < steps.length || isPaused) return;
+
+    const interval = setInterval(() => {
+      const netIncome = runGameTick();
+      if (netIncome !== 0) {
+        setIncomeNotification({ amount: netIncome, id: Date.now() });
+        // Clear notification after animation
+        setTimeout(() => setIncomeNotification(null), 2000);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [loadingStep, steps.length, isPaused, runGameTick]);
 
   const isLoading = loadingStep < steps.length;
 
@@ -76,7 +95,7 @@ const GameScreen: React.FC = () => {
           
           {/* Top Bar: Stats */}
           <div className="flex justify-between items-start pointer-events-auto">
-            <div className="bg-slate-900/90 backdrop-blur border border-slate-700 p-2 md:p-3 rounded-xl flex gap-4 md:gap-6 text-white shadow-xl">
+            <div className="relative bg-slate-900/90 backdrop-blur border border-slate-700 p-2 md:p-3 rounded-xl flex gap-4 md:gap-6 text-white shadow-xl">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-nairobi-yellow">
                     <Coins className="w-4 h-4 md:w-5 md:h-5" />
@@ -110,11 +129,26 @@ const GameScreen: React.FC = () => {
                   <span className="font-display font-bold text-lg md:text-xl">{happiness}%</span>
                 </div>
               </div>
+
+              {/* Floating Income Notification */}
+              {incomeNotification && (
+                <div 
+                  key={incomeNotification.id}
+                  className={`absolute -bottom-8 left-4 font-bold animate-fade-up ${incomeNotification.amount >= 0 ? 'text-green-400' : 'text-red-400'}`}
+                >
+                  {incomeNotification.amount >= 0 ? '+' : ''}{incomeNotification.amount} KES
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2">
-              <Button size="sm" variant="secondary" className="w-10 h-10 p-0 rounded-full flex items-center justify-center shadow-lg">
-                <Pause className="w-5 h-5 fill-current" />
+              <Button 
+                size="sm" 
+                variant={isPaused ? "primary" : "secondary"}
+                onClick={() => setIsPaused(!isPaused)}
+                className="w-10 h-10 p-0 rounded-full flex items-center justify-center shadow-lg"
+              >
+                <Pause className={`w-5 h-5 fill-current ${isPaused ? 'animate-pulse' : ''}`} />
               </Button>
               <Button size="sm" variant="outline" className="w-10 h-10 p-0 rounded-full bg-slate-900/90 border-slate-700 hover:bg-slate-800 text-white flex items-center justify-center shadow-lg">
                 <Settings className="w-5 h-5" />
@@ -129,6 +163,7 @@ const GameScreen: React.FC = () => {
              {activeTool && (
                 <div className="self-center bg-slate-900/90 border border-nairobi-yellow/50 px-4 py-2 rounded-lg backdrop-blur text-sm text-nairobi-yellow font-medium animate-in slide-in-from-bottom-2">
                    Active Tool: {BUILDING_COSTS[activeTool].label} (KES {BUILDING_COSTS[activeTool].cost.toLocaleString()})
+                   <span className="block text-xs text-slate-400 font-normal mt-1">{BUILDING_COSTS[activeTool].description}</span>
                 </div>
              )}
 

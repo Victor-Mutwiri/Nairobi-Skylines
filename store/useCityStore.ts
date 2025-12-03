@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 
 // Define the types of buildings available
@@ -19,60 +18,72 @@ export const BUILDING_COSTS: Record<BuildingType, {
   label: string; 
   population?: number; 
   happiness?: number;
+  revenue?: number; // Income generated per tick (Tax)
+  upkeep?: number; // Cost per tick (Maintenance)
   description: string;
 }> = {
   'runda_house': { 
     cost: 5000, 
     label: 'Runda House', 
     population: 5,
-    description: 'Low density suburban housing.'
+    revenue: 50,
+    description: 'Low density suburban housing. Generates tax.'
   },
   'kiosk': { 
     cost: 2000, 
     label: 'Kiosk',
-    description: 'Small commercial unit for locals.'
+    revenue: 25,
+    description: 'Small commercial unit. Generates small income.'
   },
   'apartment': { 
     cost: 20000, 
     label: 'Apartment', 
     population: 50,
-    description: 'High density residential block.'
+    revenue: 200,
+    description: 'High density residential block. High tax revenue.'
   },
   'acacia': { 
     cost: 1000, 
     label: 'Acacia Tree', 
     happiness: 2,
+    upkeep: 0,
     description: 'Native vegetation. Improves aesthetics.'
   },
   'road': { 
     cost: 500, 
     label: 'Road',
-    description: 'Basic infrastructure.'
+    upkeep: 2, // Roads cost money to maintain!
+    description: 'Basic infrastructure. Costs upkeep.'
   },
   'kicc': { 
     cost: 100000, 
     label: 'KICC', 
     population: 100, 
     happiness: 10,
-    description: 'Iconic conference center. Boosts tourism.'
+    upkeep: 500,
+    revenue: 200, // Tourism income?
+    description: 'Iconic conference center. High maintenance.'
   },
   'times_tower': { 
     cost: 80000, 
     label: 'Times Tower', 
     population: 150,
-    description: 'Corporate headquarters. High employment.'
+    revenue: 1000, // Corporate tax
+    description: 'Corporate headquarters. Huge tax generator.'
   },
   'jamia_mosque': { 
     cost: 40000, 
     label: 'Jamia Mosque', 
     happiness: 15,
+    upkeep: 100,
     description: 'Cultural landmark.'
   },
   'uhuru_park': { 
     cost: 10000, 
     label: 'Uhuru Park', 
     happiness: 20,
-    description: 'The green lung of the city.'
+    upkeep: 200,
+    description: 'The green lung of the city. Costs upkeep.'
   },
 };
 
@@ -97,6 +108,7 @@ interface CityState {
   addBuilding: (x: number, z: number, type: BuildingType) => void;
   removeBuilding: (x: number, z: number) => void;
   updateMoney: (amount: number) => void;
+  runGameTick: () => number; // Returns net income
 }
 
 export const useCityStore = create<CityState>((set, get) => ({
@@ -153,5 +165,24 @@ export const useCityStore = create<CityState>((set, get) => ({
 
   updateMoney: (amount) => set((state) => ({
     money: state.money + amount
-  }))
+  })),
+
+  runGameTick: () => {
+    const state = get();
+    let totalRevenue = 0;
+    let totalUpkeep = 0;
+
+    // Explicitly typing tile to TileData to avoid unknown error
+    Object.values(state.tiles).forEach((tile: TileData) => {
+      const config = BUILDING_COSTS[tile.type];
+      if (config.revenue) totalRevenue += config.revenue;
+      if (config.upkeep) totalUpkeep += config.upkeep;
+    });
+
+    const netIncome = totalRevenue - totalUpkeep;
+    
+    set({ money: state.money + netIncome });
+    
+    return netIncome;
+  }
 }));
