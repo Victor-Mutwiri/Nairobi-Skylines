@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
+import TenderModal from '../components/TenderModal';
 import { useCityStore, BUILDING_COSTS, BuildingType } from '../store/useCityStore';
 
 const GameScreen: React.FC = () => {
@@ -20,6 +21,7 @@ const GameScreen: React.FC = () => {
   const activeTool = useCityStore((state) => state.activeTool);
   const setActiveTool = useCityStore((state) => state.setActiveTool);
   const runGameTick = useCityStore((state) => state.runGameTick);
+  const activeEvent = useCityStore((state) => state.activeEvent);
 
   const steps = [
     "Initializing Low Poly Engine...",
@@ -41,7 +43,8 @@ const GameScreen: React.FC = () => {
 
   // Game Loop: Ticks every 5 seconds (1 Game Day)
   useEffect(() => {
-    if (loadingStep < steps.length || isPaused) return;
+    // Do not tick if loading, paused, or if a modal (event) is active
+    if (loadingStep < steps.length || isPaused || activeEvent) return;
 
     const interval = setInterval(() => {
       const netIncome = runGameTick();
@@ -53,7 +56,7 @@ const GameScreen: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [loadingStep, steps.length, isPaused, runGameTick]);
+  }, [loadingStep, steps.length, isPaused, runGameTick, activeEvent]);
 
   const isLoading = loadingStep < steps.length;
 
@@ -245,6 +248,10 @@ const GameScreen: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Modals */}
+      <TenderModal />
+
     </div>
   );
 };

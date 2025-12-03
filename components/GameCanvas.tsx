@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { GridSystem, TILE_SIZE } from './GridSystem';
 import { useCityStore, TileData } from '../store/useCityStore';
 import { BuildingRenderer, AdjacencyInfo } from './BuildingRenderer';
+import { TrafficSystem } from './TrafficSystem';
 
 // Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
 declare module 'react' {
@@ -137,6 +138,9 @@ const GameCanvas: React.FC = () => {
             />
           );
         })}
+
+        {/* Traffic Simulation */}
+        <TrafficSystem />
 
         {/* Interactive Grid System */}
         <GridSystem />

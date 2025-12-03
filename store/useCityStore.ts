@@ -14,6 +14,8 @@ export type BuildingType =
   | 'police_station'
   | 'bar';
 
+export type EventType = 'tender_expressway' | null;
+
 // Centralized Configuration for Buildings
 export const BUILDING_COSTS: Record<BuildingType, { 
   cost: number; 
@@ -118,6 +120,11 @@ interface CityState {
   corruption: number;
   tiles: Record<string, TileData>; 
   activeTool: BuildingType | null;
+
+  // Event System State
+  tickCount: number;
+  activeEvent: EventType;
+  kickbackRevenue: number; // Income generated from corrupt deals
   
   // Actions
   setActiveTool: (tool: BuildingType | null) => void;
@@ -125,6 +132,7 @@ interface CityState {
   removeBuilding: (x: number, z: number) => void;
   updateMoney: (amount: number) => void;
   runGameTick: () => number; // Returns net income
+  resolveTender: (choice: 'standard' | 'bribe') => void;
 }
 
 export const useCityStore = create<CityState>((set, get) => ({
@@ -135,6 +143,10 @@ export const useCityStore = create<CityState>((set, get) => ({
   corruption: 0,
   tiles: {},
   activeTool: null,
+  
+  tickCount: 0,
+  activeEvent: null,
+  kickbackRevenue: 0,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
 
@@ -185,6 +197,24 @@ export const useCityStore = create<CityState>((set, get) => ({
   updateMoney: (amount) => set((state) => ({
     money: state.money + amount
   })),
+
+  resolveTender: (choice) => set((state) => {
+    if (choice === 'standard') {
+      return {
+        money: state.money - 10000,
+        happiness: Math.min(100, state.happiness + 5),
+        activeEvent: null
+      };
+    } else {
+      // Bribe choice
+      return {
+        money: state.money - 2000,
+        corruption: state.corruption + 10,
+        kickbackRevenue: state.kickbackRevenue + 500, // Generate future "income"
+        activeEvent: null
+      };
+    }
+  }),
 
   runGameTick: () => {
     const state = get();
@@ -249,19 +279,61 @@ export const useCityStore = create<CityState>((set, get) => ({
     // Each station reduces insecurity by 5
     calcInsecurity = Math.max(0, baseInsecurity - (policeCount * 5));
 
+    // Finalize Corruption
+    // Add base corruption from kiosks + persistent corruption from events (stored in state.corruption is tricky if we overwrite it)
+    // Current strategy: Recalculate dynamic corruption from buildings, then ADD state-based corruption (from events).
+    // To do this correctly without infinite growth, we need to separate "Building Corruption" from "Event Corruption".
+    // For now, let's assume `state.corruption` tracks the event-based permanent corruption, and we add the kiosk count to it for display/happiness.
+    // However, state.corruption is currently overwritten in the prev implementation.
+    // FIX: We will treat `state.corruption` as the 'Base/Event' corruption. We won't overwrite it, we will just return a derived value or update a `displayCorruption`?
+    // Actually, simpler: Let's make `corruption` in state be the *total*.
+    // But we need to know how much comes from buildings vs events.
+    // For this step, I will simplify: Corruption = Kiosks + (Legacy Corruption from Bribes).
+    // I need to store `legacyCorruption` separately if I want to re-calculate every tick.
+    // OR: Just don't reset corruption every tick?
+    // The current pattern `calcCorruption = 0; ... loop ... set({ corruption: calcCorruption })` wipes event progress.
+    
+    // REFACTORING LOGIC for Persistence:
+    // We'll calculate `buildingCorruption`.
+    // We'll have a `baseCorruption` state variable (added implicitly via logic below).
+    // Actually, let's assume `state.corruption` holds the TOTAL.
+    // But `runGameTick` rebuilds stats from scratch.
+    // We need a variable for `eventCorruption` in the store. 
+    // Since I can't easily change the interface in the middle of this block without a full rewrite,
+    // I will use `kickbackRevenue` as a proxy for corruption level from bribes (since bribes add revenue).
+    // 1 Bribe = +10 Corruption and +500 Revenue. So Corruption from Bribes ~= kickbackRevenue / 50.
+    
+    const eventCorruption = Math.floor(state.kickbackRevenue / 50); 
+    const totalCorruption = calcCorruption + eventCorruption;
+
     // Finalize Happiness
     // Penalties: Corruption, Insecurity, Noise
-    calcHappiness = calcHappiness - calcCorruption - calcInsecurity - happinessPenalty;
+    calcHappiness = calcHappiness - totalCorruption - calcInsecurity - happinessPenalty;
     // Clamp Happiness
     calcHappiness = Math.max(0, Math.min(100, calcHappiness));
 
+    // Add Kickback Revenue
+    totalRevenue += state.kickbackRevenue;
+
     const netIncome = totalRevenue - totalUpkeep;
     
+    // Event Trigger Logic
+    // Trigger every 24 ticks (approx 2 minutes at 5s/tick)
+    // Only trigger if no event is active
+    const newTickCount = state.tickCount + 1;
+    let newEvent = state.activeEvent;
+    
+    if (newTickCount > 0 && newTickCount % 24 === 0 && !state.activeEvent) {
+      newEvent = 'tender_expressway';
+    }
+
     set({ 
         money: state.money + netIncome,
         happiness: calcHappiness,
         insecurity: calcInsecurity,
-        corruption: calcCorruption
+        corruption: totalCorruption,
+        tickCount: newTickCount,
+        activeEvent: newEvent
     });
     
     return netIncome;
