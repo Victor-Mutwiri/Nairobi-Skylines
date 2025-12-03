@@ -5,48 +5,10 @@ import { OrbitControls, PerspectiveCamera, Sky, Stars } from '@react-three/drei'
 import * as THREE from 'three';
 import { GridSystem, TILE_SIZE } from './GridSystem';
 import { useCityStore, TileData } from '../store/useCityStore';
-import { BuildingRenderer, AdjacencyInfo } from './BuildingRenderer';
+import { BuildingRenderer } from './BuildingRenderer';
 import { InstancedBuildings } from './InstancedBuildings';
 import { TrafficSystem } from './TrafficSystem';
 import { FireSystem } from './FireSystem';
-
-// Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
-declare module 'react' {
-  namespace JSX {
-    interface IntrinsicElements {
-      ambientLight: any;
-      directionalLight: any;
-      orthographicCamera: any;
-      fog: any;
-      mesh: any;
-      planeGeometry: any;
-      meshStandardMaterial: any;
-      gridHelper: any;
-      meshBasicMaterial: any;
-      boxGeometry: any;
-      group: any;
-    }
-  }
-}
-
-// Global augmentation as backup
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      ambientLight: any;
-      directionalLight: any;
-      orthographicCamera: any;
-      fog: any;
-      mesh: any;
-      planeGeometry: any;
-      meshStandardMaterial: any;
-      gridHelper: any;
-      meshBasicMaterial: any;
-      boxGeometry: any;
-      group: any;
-    }
-  }
-}
 
 const CYCLE_DURATION = 30; // Seconds
 
@@ -168,20 +130,10 @@ const GameCanvas: React.FC = () => {
   const tiles = useCityStore((state) => state.tiles);
   const isPowerOverlay = useCityStore((state) => state.isPowerOverlay);
 
-  // Helper to calculate road adjacencies efficiently during render
-  const getRoadAdjacency = (x: number, z: number): AdjacencyInfo => {
-    const isRoad = (tx: number, tz: number) => tiles[`${tx},${tz}`]?.type === 'road';
-    return {
-      north: isRoad(x, z - 1),
-      south: isRoad(x, z + 1),
-      east: isRoad(x + 1, z),
-      west: isRoad(x - 1, z),
-    };
-  };
-
   // Instanced types are handled by InstancedBuildings.tsx
+  // Added 'road' to this list for performance optimization
   const isInstanced = (type: string) => 
-    ['runda_house', 'kiosk', 'apartment', 'acacia'].includes(type);
+    ['runda_house', 'kiosk', 'apartment', 'acacia', 'road'].includes(type);
 
   return (
     <div className="w-full h-full bg-[#87CEEB]">
@@ -226,15 +178,13 @@ const GameCanvas: React.FC = () => {
 
         {/* --- RENDERERS --- */}
 
-        {/* 1. Instanced Buildings (High Performance for mass objects) */}
+        {/* 1. Instanced Buildings (High Performance for mass objects like Roads and Houses) */}
         <InstancedBuildings />
 
-        {/* 2. Unique/Dynamic Buildings (Roads, Landmarks) */}
+        {/* 2. Unique/Dynamic Buildings (Landmarks, Utilities) */}
         {Object.values(tiles).map((tile: TileData) => {
           if (isInstanced(tile.type)) return null;
 
-          const adjacencies = tile.type === 'road' ? getRoadAdjacency(tile.x, tile.z) : undefined;
-          
           return (
             <BuildingRenderer 
               key={`${tile.x},${tile.z}`}
@@ -245,7 +195,6 @@ const GameCanvas: React.FC = () => {
                 tile.z * TILE_SIZE + TILE_SIZE / 2
               ]}
               rotation={tile.rotation}
-              adjacencies={adjacencies}
               isOverlay={isPowerOverlay}
             />
           );

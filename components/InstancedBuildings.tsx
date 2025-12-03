@@ -10,6 +10,12 @@ const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 const cylinderGeo = new THREE.CylinderGeometry(1, 1, 1, 8);
 const coneGeo = new THREE.ConeGeometry(1, 1, 4);
 
+// Road Geometries
+const roadBaseGeo = new THREE.BoxGeometry(4, 0.1, 4);
+const roadHubGeo = new THREE.PlaneGeometry(0.6, 0.6);
+// Road Line (Vertical Strip): 0.2 wide, 2 long.
+const roadLineGeo = new THREE.PlaneGeometry(0.2, 2);
+
 // Reusable Material (White base to allow tinting via Instance color prop)
 const whiteMat = new THREE.MeshStandardMaterial({ color: "#ffffff" });
 const windowMat = new THREE.MeshBasicMaterial({ color: "#FCD116" }); // Emissive Yellow
@@ -23,12 +29,13 @@ export const InstancedBuildings: React.FC = () => {
   const isNight = useCityStore((state) => state.isNight);
 
   // Group tiles by type for instancing
-  const { houses, kiosks, apartments, trees } = useMemo(() => {
-    const groups: Record<string, TileData[]> = {
-      houses: [],
-      kiosks: [],
-      apartments: [],
-      trees: []
+  const { houses, kiosks, apartments, trees, roads } = useMemo(() => {
+    const groups = {
+      houses: [] as TileData[],
+      kiosks: [] as TileData[],
+      apartments: [] as TileData[],
+      trees: [] as TileData[],
+      roads: [] as TileData[]
     };
     
     Object.values(tiles).forEach((tile) => {
@@ -36,14 +43,62 @@ export const InstancedBuildings: React.FC = () => {
       else if (tile.type === 'kiosk') groups.kiosks.push(tile);
       else if (tile.type === 'apartment') groups.apartments.push(tile);
       else if (tile.type === 'acacia') groups.trees.push(tile);
+      else if (tile.type === 'road') groups.roads.push(tile);
     });
 
     return groups;
   }, [tiles]);
 
+  // Road Adjacency & Instancing Calculation
+  const { roadHubs, roadLines } = useMemo(() => {
+    const hubs: { x: number, z: number }[] = [];
+    // Stores position and rotation for every line marking
+    const lines: { x: number, z: number, rotation: [number, number, number] }[] = [];
+    
+    // Create a Set for fast O(1) lookups of road positions
+    const roadSet = new Set(roads.map(t => `${t.x},${t.z}`));
+
+    roads.forEach(t => {
+       const n = roadSet.has(`${t.x},${t.z-1}`);
+       const s = roadSet.has(`${t.x},${t.z+1}`);
+       const e = roadSet.has(`${t.x+1},${t.z}`);
+       const w = roadSet.has(`${t.x-1},${t.z}`);
+       const hasConnection = n || s || e || w;
+       
+       const cx = t.x * TILE_SIZE + TILE_SIZE/2;
+       const cz = t.z * TILE_SIZE + TILE_SIZE/2;
+       const yLine = 0.11;
+       const yHub = 0.12;
+       
+       if (hasConnection) {
+          hubs.push({ x: cx, z: cz });
+          
+          // NOTE: PlaneGeometry(0.2, 2) is aligned with local Y-axis by default.
+          // Rotating -90deg on X lays it flat along Z-axis (North-South).
+          
+          if (n) lines.push({ x: cx, z: cz - 1, rotation: [-Math.PI/2, 0, 0] });
+          if (s) lines.push({ x: cx, z: cz + 1, rotation: [-Math.PI/2, 0, 0] });
+          
+          // Rotate Z 90deg to make it East-West
+          // Order is Euler XYZ. X(-90) -> Y becomes Z. Z(90) rotates around local Z (which is now World Up?).
+          // Let's stick to simple transforms:
+          // X: -PI/2 puts Y-axis along -Z. 
+          // If we add Z: PI/2, it rotates the plane in its local frame.
+          if (e) lines.push({ x: cx + 1, z: cz, rotation: [-Math.PI/2, 0, Math.PI/2] });
+          if (w) lines.push({ x: cx - 1, z: cz, rotation: [-Math.PI/2, 0, Math.PI/2] });
+
+       } else {
+          // Isolated road - Faint line visual (just a vertical line for now)
+          lines.push({ x: cx, z: cz, rotation: [-Math.PI/2, 0, 0] });
+       }
+    });
+
+    return { roadHubs: hubs, roadLines: lines };
+  }, [roads]);
+
   // Overlay Logic Helper
   // If overlay is ON:
-  // - Unpowered residential -> RED (Flash effect handled via color prop if possible, else just static red)
+  // - Unpowered residential -> RED 
   // - Powered residential -> Normal color
   // - Other stuff -> Gray
   const isPowered = powerCapacity >= powerDemand;
@@ -60,11 +115,50 @@ export const InstancedBuildings: React.FC = () => {
     return overlayGray; // Gray out everything else
   };
 
+  const roadColor = getColor("#334155", false);
+  const markColor = getColor("#fcd116", false);
+
   // Window Logic: Visible only at night and if powered
   const showWindows = isNight && isPowered;
 
   return (
     <group>
+      {/* --- ROADS (High Performance Instancing) --- */}
+      {/* 1. Base Asphalt */}
+      <Instances range={1000} geometry={roadBaseGeo} material={whiteMat}>
+        {roads.map((t) => (
+           <Instance 
+             key={`road-base-${t.x}-${t.z}`}
+             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 0.05, t.z * TILE_SIZE + TILE_SIZE / 2]}
+             color={roadColor}
+           />
+        ))}
+      </Instances>
+      
+      {/* 2. Center Hubs (for junctions) */}
+      <Instances range={1000} geometry={roadHubGeo} material={whiteMat}>
+         {roadHubs.map((h, i) => (
+            <Instance 
+              key={`road-hub-${i}`}
+              position={[h.x, 0.12, h.z]}
+              rotation={[-Math.PI/2, 0, 0]}
+              color={markColor}
+            />
+         ))}
+      </Instances>
+
+      {/* 3. Road Lines */}
+      <Instances range={4000} geometry={roadLineGeo} material={whiteMat}>
+         {roadLines.map((l, i) => (
+            <Instance 
+              key={`road-line-${i}`}
+              position={[l.x, 0.11, l.z]}
+              rotation={l.rotation as any}
+              color={markColor}
+            />
+         ))}
+      </Instances>
+
       {/* --- RUNDA HOUSES --- */}
       {/* Body: White Box */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>

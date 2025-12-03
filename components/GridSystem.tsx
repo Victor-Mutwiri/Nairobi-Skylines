@@ -4,32 +4,6 @@ import { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCityStore } from '../store/useCityStore';
 
-// Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
-declare module 'react' {
-  namespace JSX {
-    interface IntrinsicElements {
-      gridHelper: any;
-      planeGeometry: any;
-      meshBasicMaterial: any;
-      mesh: any;
-      group: any;
-    }
-  }
-}
-
-// Global augmentation as backup
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      gridHelper: any;
-      planeGeometry: any;
-      meshBasicMaterial: any;
-      mesh: any;
-      group: any;
-    }
-  }
-}
-
 // Grid Configuration
 export const TILE_SIZE = 4; // Physical size of one tile in the world
 export const GRID_SIZE = 20; // Number of tiles along one axis (20x20 grid)

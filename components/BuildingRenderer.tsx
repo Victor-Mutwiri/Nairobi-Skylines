@@ -1,24 +1,7 @@
 
-
 import React, { useMemo } from 'react';
 import { BuildingType, useCityStore } from '../store/useCityStore';
 import * as THREE from 'three';
-
-// Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
-declare module 'react' {
-  namespace JSX {
-    interface IntrinsicElements {
-      mesh: any;
-      group: any;
-      boxGeometry: any;
-      cylinderGeometry: any;
-      coneGeometry: any;
-      sphereGeometry: any;
-      planeGeometry: any;
-      meshStandardMaterial: any;
-    }
-  }
-}
 
 export interface AdjacencyInfo {
   north: boolean;
@@ -67,50 +50,6 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
   };
   
   switch (type) {
-    case 'road':
-      const { north, south, east, west } = adjacencies;
-      const hasConnection = north || south || east || west;
-      const roadColor = getMatColor("#334155");
-      const markColor = getMatColor("#fcd116");
-
-      return (
-        <group position={position}>
-            {/* Base Asphalt */}
-            <mesh position={[0, 0.05, 0]} receiveShadow>
-                <boxGeometry args={[4, 0.1, 4]} />
-                <meshStandardMaterial color={roadColor} />
-            </mesh>
-            
-            {/* Center Hub */}
-            {hasConnection && (
-              <mesh position={[0, 0.12, 0]} rotation={[-Math.PI/2, 0, 0]}>
-                  <planeGeometry args={[0.6, 0.6]} />
-                  <meshStandardMaterial color={markColor} />
-              </mesh>
-            )}
-
-            {/* Lines */}
-            {[
-                { active: north, pos: [0, 0.11, -1], dims: [0.2, 2] },
-                { active: south, pos: [0, 0.11, 1], dims: [0.2, 2] },
-                { active: east, pos: [1, 0.11, 0], dims: [2, 0.2] },
-                { active: west, pos: [-1, 0.11, 0], dims: [2, 0.2] },
-            ].map((line, i) => line.active && (
-                <mesh key={i} position={line.pos as any} rotation={[-Math.PI/2, 0, 0]}>
-                    <planeGeometry args={line.dims as any} />
-                    <meshStandardMaterial color={markColor} />
-                </mesh>
-            ))}
-
-             {!hasConnection && (
-               <mesh position={[0, 0.11, 0]} rotation={[-Math.PI/2, 0, 0]}>
-                  <planeGeometry args={[0.2, 2]} />
-                  <meshStandardMaterial color={markColor} opacity={0.5} transparent />
-               </mesh>
-            )}
-        </group>
-      );
-
     case 'kicc':
         return (
           <group position={position} rotation={[0, rotationY, 0]}>
