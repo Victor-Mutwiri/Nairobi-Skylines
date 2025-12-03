@@ -1,6 +1,8 @@
+
 import React, { useRef } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useCityStore } from '../store/useCityStore';
 
 // Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
 declare module 'react' {
@@ -34,6 +36,9 @@ export const GRID_SIZE = 20; // Number of tiles along one axis (20x20 grid)
 
 export const GridSystem: React.FC = () => {
   const cursorRef = useRef<THREE.Mesh>(null);
+  
+  const activeTool = useCityStore((state) => state.activeTool);
+  const addBuilding = useCityStore((state) => state.addBuilding);
 
   // Handle Mouse Movement (Hover Effect)
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
@@ -63,6 +68,14 @@ export const GridSystem: React.FC = () => {
         0.1, // Slightly elevated to prevent z-fighting with grid/ground
         zIndex * TILE_SIZE + TILE_SIZE / 2
       );
+      
+      // Visual feedback: Green if tool is active, White if inspecting
+      if (activeTool) {
+        (cursorRef.current.material as THREE.MeshBasicMaterial).color.set('#4ade80');
+      } else {
+        (cursorRef.current.material as THREE.MeshBasicMaterial).color.set('white');
+      }
+
     } else {
       cursorRef.current.visible = false;
     }
@@ -84,6 +97,10 @@ export const GridSystem: React.FC = () => {
 
     if (isValidTile) {
       console.log(`Grid Clicked: [${xIndex}, ${zIndex}]`);
+      
+      if (activeTool) {
+        addBuilding(xIndex, zIndex, activeTool);
+      }
     }
   };
 

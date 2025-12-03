@@ -1,9 +1,10 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft, Settings, Pause } from 'lucide-react';
+import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
-import { useCityStore } from '../store/useCityStore';
+import { useCityStore, BUILDING_COSTS, BuildingType } from '../store/useCityStore';
 
 const GameScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -12,6 +13,9 @@ const GameScreen: React.FC = () => {
   // Connect to store
   const money = useCityStore((state) => state.money);
   const population = useCityStore((state) => state.population);
+  const happiness = useCityStore((state) => state.happiness);
+  const activeTool = useCityStore((state) => state.activeTool);
+  const setActiveTool = useCityStore((state) => state.setActiveTool);
 
   const steps = [
     "Initializing Low Poly Engine...",
@@ -68,40 +72,109 @@ const GameScreen: React.FC = () => {
 
       {/* In-Game UI Overlay (HUD) */}
       {!isLoading && (
-        <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-6">
+        <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 md:p-6">
           
-          {/* Top Bar */}
+          {/* Top Bar: Stats */}
           <div className="flex justify-between items-start pointer-events-auto">
-            <div className="bg-slate-900/90 backdrop-blur border border-slate-700 p-3 rounded-xl flex gap-4 text-white shadow-xl">
-              <div className="flex flex-col">
-                <span className="text-xs text-slate-400 uppercase tracking-wider">Balance</span>
-                <span className="text-nairobi-yellow font-display font-bold text-xl">KES {money.toLocaleString()}</span>
+            <div className="bg-slate-900/90 backdrop-blur border border-slate-700 p-2 md:p-3 rounded-xl flex gap-4 md:gap-6 text-white shadow-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-nairobi-yellow">
+                    <Coins className="w-4 h-4 md:w-5 md:h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Balance</span>
+                  <span className="text-nairobi-yellow font-display font-bold text-lg md:text-xl">KES {money.toLocaleString()}</span>
+                </div>
               </div>
-               <div className="w-px bg-slate-700"></div>
-              <div className="flex flex-col">
-                <span className="text-xs text-slate-400 uppercase tracking-wider">Population</span>
-                <span className="font-display font-bold text-xl">{population.toLocaleString()}</span>
+
+               <div className="w-px bg-slate-700 my-1"></div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                    <Users className="w-4 h-4 md:w-5 md:h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Population</span>
+                  <span className="font-display font-bold text-lg md:text-xl">{population.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="w-px bg-slate-700 my-1"></div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-nairobi-green">
+                    <Smile className="w-4 h-4 md:w-5 md:h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Happiness</span>
+                  <span className="font-display font-bold text-lg md:text-xl">{happiness}%</span>
+                </div>
               </div>
             </div>
 
             <div className="flex gap-2">
-              <Button size="sm" variant="secondary" className="w-10 h-10 p-0 rounded-full flex items-center justify-center">
+              <Button size="sm" variant="secondary" className="w-10 h-10 p-0 rounded-full flex items-center justify-center shadow-lg">
                 <Pause className="w-5 h-5 fill-current" />
               </Button>
-              <Button size="sm" variant="outline" className="w-10 h-10 p-0 rounded-full bg-slate-900/90 border-slate-700 hover:bg-slate-800 text-white flex items-center justify-center">
+              <Button size="sm" variant="outline" className="w-10 h-10 p-0 rounded-full bg-slate-900/90 border-slate-700 hover:bg-slate-800 text-white flex items-center justify-center shadow-lg">
                 <Settings className="w-5 h-5" />
               </Button>
             </div>
           </div>
 
-          {/* Bottom Bar (Toolbar Placeholder) */}
-          <div className="flex justify-center pointer-events-auto">
-             <div className="bg-slate-900/90 backdrop-blur border border-slate-700 p-2 rounded-2xl shadow-2xl flex gap-2">
-                <Button size="sm" variant="primary" onClick={() => navigate('/')}>
-                   <ArrowLeft className="w-4 h-4 mr-2" />
-                   Exit to Menu
-                </Button>
-                {/* Tools will go here later */}
+          {/* Bottom Bar: Building Tools */}
+          <div className="flex flex-col gap-4 pointer-events-auto">
+             
+             {/* Selected Tool Info Tip */}
+             {activeTool && (
+                <div className="self-center bg-slate-900/90 border border-nairobi-yellow/50 px-4 py-2 rounded-lg backdrop-blur text-sm text-nairobi-yellow font-medium animate-in slide-in-from-bottom-2">
+                   Active Tool: {BUILDING_COSTS[activeTool].label} (KES {BUILDING_COSTS[activeTool].cost.toLocaleString()})
+                </div>
+             )}
+
+             <div className="flex justify-center items-end gap-3 w-full overflow-x-auto pb-2 scrollbar-hide">
+                <div className="bg-slate-900/90 backdrop-blur border border-slate-700 p-2 rounded-2xl shadow-2xl flex gap-2">
+                    <Button 
+                        size="sm" 
+                        variant="primary" 
+                        className="bg-red-600 hover:bg-red-700 border-none text-white shadow-none h-12 w-12 p-0 flex items-center justify-center rounded-xl"
+                        onClick={() => navigate('/')}
+                        title="Exit Game"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </Button>
+                    
+                    <div className="w-px bg-slate-700 mx-1 h-8 self-center"></div>
+
+                    {(Object.keys(BUILDING_COSTS) as BuildingType[]).map((type) => {
+                        const config = BUILDING_COSTS[type];
+                        const isActive = activeTool === type;
+                        const canAfford = money >= config.cost;
+
+                        return (
+                            <button
+                                key={type}
+                                onClick={() => setActiveTool(isActive ? null : type)}
+                                disabled={!canAfford}
+                                className={`
+                                    relative group flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all duration-200 border-2
+                                    ${isActive 
+                                        ? 'bg-nairobi-yellow border-nairobi-yellow text-nairobi-black scale-105 shadow-lg shadow-yellow-500/20' 
+                                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:border-slate-600'
+                                    }
+                                    ${!canAfford ? 'opacity-50 cursor-not-allowed grayscale' : ''}
+                                `}
+                            >
+                                <span className={`text-[10px] font-bold uppercase mb-1 leading-none ${isActive ? 'text-black' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                                    {config.label}
+                                </span>
+                                <span className={`text-xs font-mono font-bold ${isActive ? 'text-black' : 'text-nairobi-yellow'}`}>
+                                    {config.cost >= 1000 ? `${config.cost/1000}k` : config.cost}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
              </div>
           </div>
         </div>

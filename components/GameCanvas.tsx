@@ -1,8 +1,11 @@
+
 import React from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
-import { GridSystem } from './GridSystem';
+import { GridSystem, TILE_SIZE } from './GridSystem';
+import { useCityStore, TileData } from '../store/useCityStore';
+import { BuildingRenderer } from './BuildingRenderer';
 
 // Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
 declare module 'react' {
@@ -43,6 +46,8 @@ declare global {
 }
 
 const GameCanvas: React.FC = () => {
+  const tiles = useCityStore((state) => state.tiles);
+
   return (
     <div className="w-full h-full bg-[#87CEEB]">
       <Canvas
@@ -102,6 +107,20 @@ const GameCanvas: React.FC = () => {
           <planeGeometry args={[1000, 1000]} />
           <meshStandardMaterial color="#4f772d" roughness={0.8} />
         </mesh>
+
+        {/* Placed Buildings */}
+        {Object.values(tiles).map((tile: TileData) => (
+          <BuildingRenderer 
+            key={`${tile.x},${tile.z}`}
+            type={tile.type}
+            position={[
+              tile.x * TILE_SIZE + TILE_SIZE / 2, 
+              0, 
+              tile.z * TILE_SIZE + TILE_SIZE / 2
+            ]}
+            rotation={tile.rotation}
+          />
+        ))}
 
         {/* Interactive Grid System */}
         <GridSystem />
