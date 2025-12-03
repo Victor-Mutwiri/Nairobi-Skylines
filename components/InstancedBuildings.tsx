@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Instances, Instance } from '@react-three/drei';
 import * as THREE from 'three';
@@ -18,7 +17,6 @@ const roadLineGeo = new THREE.PlaneGeometry(0.2, 2);
 
 // Reusable Material (White base to allow tinting via Instance color prop)
 const whiteMat = new THREE.MeshStandardMaterial({ color: "#ffffff" });
-const windowMat = new THREE.MeshBasicMaterial({ color: "#FCD116" }); // Emissive Yellow
 
 export const InstancedBuildings: React.FC = () => {
   // Explicitly cast tiles to Record<string, TileData> to fix inference issues
@@ -26,16 +24,17 @@ export const InstancedBuildings: React.FC = () => {
   const isPowerOverlay = useCityStore((state) => state.isPowerOverlay);
   const powerCapacity = useCityStore((state) => state.powerCapacity);
   const powerDemand = useCityStore((state) => state.powerDemand);
-  const isNight = useCityStore((state) => state.isNight);
+  // Removed isNight hook
 
   // Group tiles by type for instancing
-  const { houses, kiosks, apartments, trees, roads } = useMemo(() => {
+  const { houses, kiosks, apartments, trees, roads, expressways } = useMemo(() => {
     const groups = {
       houses: [] as TileData[],
       kiosks: [] as TileData[],
       apartments: [] as TileData[],
       trees: [] as TileData[],
-      roads: [] as TileData[]
+      roads: [] as TileData[],
+      expressways: [] as TileData[]
     };
     
     Object.values(tiles).forEach((tile) => {
@@ -44,6 +43,7 @@ export const InstancedBuildings: React.FC = () => {
       else if (tile.type === 'apartment') groups.apartments.push(tile);
       else if (tile.type === 'acacia') groups.trees.push(tile);
       else if (tile.type === 'road') groups.roads.push(tile);
+      else if (tile.type === 'expressway_pillar') groups.expressways.push(tile);
     });
 
     return groups;
@@ -111,12 +111,12 @@ export const InstancedBuildings: React.FC = () => {
     
     // 2. Road Check: Needs road + has access
     // Trees don't need roads
-    if (tile.type !== 'acacia' && tile.type !== 'road' && tile.hasRoadAccess === false) {
+    if (tile.type !== 'acacia' && tile.type !== 'road' && tile.type !== 'expressway_pillar' && tile.hasRoadAccess === false) {
          return '#f97316'; // ORANGE: No Road Access
     }
 
     // 3. Functional: Return normal color (or slightly dimmed)
-    if (requiresPower || tile.type === 'road' || config.population) {
+    if (requiresPower || tile.type === 'road' || tile.type === 'expressway_pillar' || config.population) {
         return defaultColor; 
     }
     
@@ -124,10 +124,6 @@ export const InstancedBuildings: React.FC = () => {
   };
 
   const roadColor = (t: TileData) => getColor("#334155", t);
-  const markColor = (t: TileData) => getColor("#fcd116", t);
-
-  // Window Logic: Visible only at night and if powered
-  const showWindows = isNight && isGlobalPowerSufficient; // Fast check for visual only
 
   return (
     <group>
@@ -164,6 +160,39 @@ export const InstancedBuildings: React.FC = () => {
          ))}
       </Instances>
 
+      {/* --- EXPRESSWAY PILLARS --- */}
+      <Instances range={50} geometry={boxGeo} material={whiteMat}>
+        {expressways.map((t) => (
+           <Instance 
+             key={`exp-pillar-${t.x}-${t.z}`}
+             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 4, t.z * TILE_SIZE + TILE_SIZE / 2]}
+             scale={[1.5, 8, 1.5]}
+             color={getColor("#94a3b8", t)}
+           />
+        ))}
+      </Instances>
+       <Instances range={50} geometry={boxGeo} material={whiteMat}>
+        {expressways.map((t) => (
+           <Instance 
+             key={`exp-top-${t.x}-${t.z}`}
+             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 8, t.z * TILE_SIZE + TILE_SIZE / 2]}
+             scale={[6, 0.2, 3]} // Wide T-beam
+             color={getColor("#334155", t)}
+           />
+        ))}
+      </Instances>
+      <Instances range={50} geometry={roadLineGeo} material={whiteMat}>
+        {expressways.map((t) => (
+           <Instance 
+             key={`exp-line-${t.x}-${t.z}`}
+             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 8.11, t.z * TILE_SIZE + TILE_SIZE / 2]}
+             rotation={[-Math.PI/2, 0, Math.PI/2]} // Horizontal line
+             color="#fcd116"
+           />
+        ))}
+      </Instances>
+
+
       {/* --- RUNDA HOUSES --- */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
         {houses.map((t) => (
@@ -197,19 +226,6 @@ export const InstancedBuildings: React.FC = () => {
         ))}
       </Instances>
       
-      {showWindows && (
-        <Instances range={1000} geometry={boxGeo} material={windowMat}>
-            {houses.map((t) => (
-            <Instance
-                key={`house-win-${t.x}-${t.z}`}
-                position={[t.x * TILE_SIZE + TILE_SIZE / 2 + 0.5, 1.2, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.3]}
-                scale={[0.8, 0.8, 0.1]}
-            />
-            ))}
-        </Instances>
-      )}
-
-
       {/* --- KIOSKS --- */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
         {kiosks.map((t) => (
@@ -255,29 +271,6 @@ export const InstancedBuildings: React.FC = () => {
         ))}
       </Instances>
       
-      {showWindows && (
-        <Instances range={3000} geometry={boxGeo} material={windowMat}>
-            {apartments.flatMap((t) => [
-                <Instance
-                    key={`apt-win-1-${t.x}-${t.z}`}
-                    position={[t.x * TILE_SIZE + TILE_SIZE / 2, 5, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.45]}
-                    scale={[2, 0.8, 0.1]}
-                />,
-                <Instance
-                    key={`apt-win-2-${t.x}-${t.z}`}
-                    position={[t.x * TILE_SIZE + TILE_SIZE / 2, 3, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.45]}
-                    scale={[2, 0.8, 0.1]}
-                />,
-                <Instance
-                    key={`apt-win-3-${t.x}-${t.z}`}
-                    position={[t.x * TILE_SIZE + TILE_SIZE / 2, 1, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.45]}
-                    scale={[2, 0.8, 0.1]}
-                />
-            ])}
-        </Instances>
-      )}
-
-
       {/* --- TREES --- */}
       <Instances range={1000} geometry={cylinderGeo} material={whiteMat}>
         {trees.map((t) => (

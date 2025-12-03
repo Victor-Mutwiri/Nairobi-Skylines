@@ -140,6 +140,13 @@ export const BUILDING_COSTS: Record<BuildingType, {
     depth: 2,
     description: 'The ultimate status symbol. Wins the game. Needs 2x2 space.'
   },
+  'expressway_pillar': {
+    cost: 0,
+    label: 'Expressway',
+    revenue: 200, // Toll revenue per pillar
+    pollution: 2,
+    description: 'Elevated highway. Generates tolls but noise.'
+  },
   'reserved': {
     cost: 0,
     label: 'Reserved',

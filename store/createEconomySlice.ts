@@ -10,16 +10,46 @@ export const createEconomySlice: CitySlice<EconomySlice> = (set, get) => ({
   pollution: 0,
   kickbackRevenue: 0,
   gameWon: false,
+  financials: {
+    income: { residential: 0, commercial: 0, tolls: 0, kickbacks: 0, total: 0 },
+    expenses: { infrastructure: 0, services: 0, emergency: 0, total: 0 },
+    net: 0
+  },
 
   updateMoney: (amount) => set((state) => ({
     money: state.money + amount
   })),
 
   resolveTender: (choice) => set((state) => {
+    if (choice === 'reject') {
+        return { activeEvent: null };
+    }
+
+    // Construct the Expressway (Visual + Gameplay Impact)
+    // We build it along Z = -9 (Back edge of map)
+    const newTiles = { ...state.tiles };
+    
+    // Build pillars every 2 units
+    for (let x = -10; x < 10; x++) {
+        // Only place actual pillars every 2 units, but logic handles single tile
+        if (x % 2 === 0) {
+             const key = `${x},-9`;
+             newTiles[key] = {
+                type: 'expressway_pillar',
+                x: x,
+                z: -9,
+                rotation: 0,
+                hasRoadAccess: true, // It's a road itself
+                isPowered: true // Streetlights
+             };
+        }
+    }
+
     if (choice === 'standard') {
       return {
         money: state.money - 10000,
         happiness: Math.min(100, state.happiness + 5),
+        tiles: newTiles,
         activeEvent: null
       };
     } else {
@@ -28,6 +58,7 @@ export const createEconomySlice: CitySlice<EconomySlice> = (set, get) => ({
         money: state.money - 2000,
         corruption: state.corruption + 10,
         kickbackRevenue: state.kickbackRevenue + 500,
+        tiles: newTiles, // Still build it
         activeEvent: null
       };
     }

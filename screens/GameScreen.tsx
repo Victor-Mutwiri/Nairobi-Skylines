@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle, Zap, Trash2, Hammer, Car } from 'lucide-react';
@@ -6,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
 import TenderModal from '../components/TenderModal';
 import WinModal from '../components/WinModal';
+import BudgetModal from '../components/BudgetModal';
 import { useCityStore, BUILDING_COSTS, BuildingType } from '../store/useCityStore';
 
 const GameScreen: React.FC = () => {
@@ -26,10 +26,12 @@ const GameScreen: React.FC = () => {
   const powerCapacity = useCityStore((state) => state.powerCapacity);
   const powerDemand = useCityStore((state) => state.powerDemand);
   const isPowerOverlay = useCityStore((state) => state.isPowerOverlay);
+  const financials = useCityStore((state) => state.financials);
   
   const activeTool = useCityStore((state) => state.activeTool);
   const setActiveTool = useCityStore((state) => state.setActiveTool);
   const togglePowerOverlay = useCityStore((state) => state.togglePowerOverlay);
+  const setShowBudget = useCityStore((state) => state.setShowBudget);
   const runGameTick = useCityStore((state) => state.runGameTick);
   const activeEvent = useCityStore((state) => state.activeEvent);
   const saveGame = useCityStore((state) => state.saveGame);
@@ -129,16 +131,25 @@ const GameScreen: React.FC = () => {
           <div className="flex justify-between items-start pointer-events-auto w-full">
             <div className="relative bg-slate-900/90 backdrop-blur border border-slate-700 p-2 md:p-3 rounded-xl flex gap-3 md:gap-4 text-white shadow-xl overflow-x-auto max-w-[80vw]">
               
-              {/* Money */}
-              <div className="flex items-center gap-2 md:gap-3 min-w-fit">
-                <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-nairobi-yellow">
+              {/* Money (Clickable) */}
+              <button 
+                onClick={() => setShowBudget(true)}
+                className="flex items-center gap-2 md:gap-3 min-w-fit hover:bg-slate-800 rounded-lg p-1 transition-colors group"
+                title="View Budget Report"
+              >
+                <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-nairobi-yellow group-hover:scale-110 transition-transform">
                     <Coins className="w-4 h-4 md:w-5 md:h-5" />
                 </div>
-                <div className="flex flex-col">
+                <div className="flex flex-col items-start">
                   <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Balance</span>
-                  <span className="text-nairobi-yellow font-display font-bold text-lg md:text-xl">KES {money.toLocaleString()}</span>
+                  <div className="flex items-center gap-1">
+                      <span className="text-nairobi-yellow font-display font-bold text-lg md:text-xl">KES {money.toLocaleString()}</span>
+                      <span className={`text-[10px] ${financials.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        ({financials.net >= 0 ? '+' : ''}{financials.net}/day)
+                      </span>
+                  </div>
                 </div>
-              </div>
+              </button>
 
                <div className="w-px bg-slate-700 my-1"></div>
 
@@ -373,6 +384,7 @@ const GameScreen: React.FC = () => {
       {/* Modals */}
       <TenderModal />
       <WinModal />
+      <BudgetModal />
 
     </div>
   );

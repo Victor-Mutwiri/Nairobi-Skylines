@@ -19,6 +19,7 @@ export type BuildingType =
   | 'dumpsite'
   | 'informal_settlement'
   | 'nbk_tower'
+  | 'expressway_pillar'
   | 'reserved';
 
 export type ToolType = BuildingType | 'bulldozer';
@@ -46,6 +47,23 @@ export interface HighScore {
   score: number;
 }
 
+export interface FinancialReport {
+  income: {
+    residential: number;
+    commercial: number;
+    tolls: number;
+    kickbacks: number;
+    total: number;
+  };
+  expenses: {
+    infrastructure: number;
+    services: number;
+    emergency: number;
+    total: number;
+  };
+  net: number;
+}
+
 // --- Slice Interfaces ---
 
 export interface EconomySlice {
@@ -57,9 +75,10 @@ export interface EconomySlice {
   pollution: number;
   kickbackRevenue: number;
   gameWon: boolean;
+  financials: FinancialReport;
   
   updateMoney: (amount: number) => void;
-  resolveTender: (choice: 'standard' | 'bribe') => void;
+  resolveTender: (choice: 'standard' | 'bribe' | 'reject') => void;
   saveHighScore: () => void;
   setGameWon: (won: boolean) => void;
 }
@@ -68,11 +87,12 @@ export interface UISlice {
   activeTool: ToolType | null;
   activeEvent: EventType;
   isPowerOverlay: boolean;
-  isNight: boolean;
+  // isNight removed as requested
+  showBudget: boolean;
 
   setActiveTool: (tool: ToolType | null) => void;
   togglePowerOverlay: () => void;
-  setIsNight: (isNight: boolean) => void;
+  setShowBudget: (show: boolean) => void;
 }
 
 export interface GridSlice {

@@ -121,9 +121,14 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
 
   runGameTick: () => {
     const state = get();
-    let totalRevenue = 0;
-    let totalUpkeep = 0;
     
+    // Financial Tracking
+    let incomeResidential = 0;
+    let incomeCommercial = 0;
+    let incomeTolls = 0;
+    let expenseInfra = 0;
+    let expenseServices = 0;
+
     let calcCorruption = 0;
     let calcHappiness = 50; 
     let calcPopulation = 0;
@@ -256,25 +261,34 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
       }
 
       // --- GAMEPLAY IMPACT CALCULATION ---
+      
+      // Population: Counts regardless of service status (People move in, even if no power)
+      if (config.population) {
+          calcPopulation += config.population;
+      }
+
       const requiresPower = !!config.powerConsumption;
-      // Some buildings don't need roads (Trees, Slums, etc.)
       const needsRoad = tile.type !== 'acacia' && tile.type !== 'informal_settlement' && tile.type !== 'road'; 
       
       const effectiveRoadAccess = needsRoad ? hasRoadAccess : true;
 
-      // A building functions if:
-      // 1. It has Road Access (if required)
-      // 2. It has Power (if required) - Requires both Local Grid connection AND Global Capacity
+      // A building functions (Generates Revenue) if:
       const isFunctioning = effectiveRoadAccess && (!requiresPower || (requiresPower && isPowerCapacitySufficient && hasPowerAccess));
 
-      // Finances
-      if (isFunctioning && config.revenue) totalRevenue += config.revenue;
+      // Financial Calculation
+      if (config.revenue) {
+          if (isFunctioning) {
+             if (tile.type === 'runda_house' || tile.type === 'apartment') incomeResidential += config.revenue;
+             else if (tile.type === 'expressway_pillar') incomeTolls += config.revenue;
+             else incomeCommercial += config.revenue;
+          }
+      }
       
-      // Upkeep is paid regardless of functionality (simulating wasted budget)
-      if (config.upkeep) totalUpkeep += config.upkeep;
-
-      // Population
-      if (isFunctioning && config.population) calcPopulation += config.population;
+      // Upkeep Calculation (Always paid)
+      if (config.upkeep) {
+         if (tile.type === 'road') expenseInfra += config.upkeep;
+         else expenseServices += config.upkeep;
+      }
 
       // Happiness
       if (isFunctioning && config.happiness) calcHappiness += config.happiness;
@@ -284,13 +298,10 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
 
       // Penalties for Broken Services
       if (!effectiveRoadAccess && needsRoad) {
-           // Abandonment Penalty (minor happiness hit per disconnected building)
-           // If it's a house, big hit.
-           if (config.population) happinessPenalty += 1;
+           if (config.population) happinessPenalty += 2;
       }
       if (effectiveRoadAccess && requiresPower && (!hasPowerAccess || !isPowerCapacitySufficient)) {
-           // Blackout Penalty
-           if (config.population) happinessPenalty += 2;
+           if (config.population) happinessPenalty += 5;
       }
 
       // Corruption & Police
@@ -317,17 +328,14 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
     });
 
     // --- TRAFFIC SIMULATION LOGIC ---
-    // Count road tiles (capacity) vs Population (demand)
     const roadCount = roadKeys.size;
-    // Assume 1 road tile handles 15 citizens efficiently
     const trafficCapacity = Math.max(1, roadCount * 15); 
     const trafficDensity = calcPopulation / trafficCapacity;
     
     let trafficPenalty = 0;
     if (trafficDensity > 1.0) {
-        // Penalty grows with excess density
         trafficPenalty = Math.floor((trafficDensity - 1.0) * 20); 
-        trafficPenalty = Math.min(30, trafficPenalty); // Cap penalty
+        trafficPenalty = Math.min(30, trafficPenalty);
     }
     happinessPenalty += trafficPenalty;
 
@@ -336,9 +344,7 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
     let emergencyCost = 0;
 
     Object.keys(newFires).forEach(key => {
-      const [fxStr, fzStr] = key.split(',');
-      const fx = parseInt(fxStr);
-      const fz = parseInt(fzStr);
+      const [fx, fz] = key.split(',').map(Number);
       
       let extinguished = false;
       for (const station of fireStations) {
@@ -403,9 +409,9 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
     if (!isPowerCapacitySufficient && calcPowerDemand > 0) calcHappiness -= 20; 
     calcHappiness = Math.max(0, Math.min(100, calcHappiness));
 
-    totalRevenue += state.kickbackRevenue;
-
-    const netIncome = totalRevenue - totalUpkeep - emergencyCost;
+    const totalIncome = incomeResidential + incomeCommercial + incomeTolls + state.kickbackRevenue;
+    const totalExpenses = expenseInfra + expenseServices + emergencyCost;
+    const netIncome = totalIncome - totalExpenses;
     
     const newTickCount = state.tickCount + 1;
     let newEvent = state.activeEvent;
@@ -462,7 +468,23 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
         tickCount: newTickCount,
         activeEvent: newEvent,
         fires: newFires,
-        tiles: finalTiles
+        tiles: finalTiles,
+        financials: {
+            income: {
+                residential: incomeResidential,
+                commercial: incomeCommercial,
+                tolls: incomeTolls,
+                kickbacks: state.kickbackRevenue,
+                total: totalIncome
+            },
+            expenses: {
+                infrastructure: expenseInfra,
+                services: expenseServices,
+                emergency: emergencyCost,
+                total: totalExpenses
+            },
+            net: netIncome
+        }
     });
     
     return netIncome;

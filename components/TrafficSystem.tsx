@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -51,6 +50,8 @@ const MatatuAgent: React.FC<AgentProps> = ({ startX, startZ }) => {
   const state = useRef({
     currentX: startX,
     currentZ: startZ,
+    lastX: -999, // Track where we came from
+    lastZ: -999,
     targetX: startX,
     targetZ: startZ,
     progress: 0,
@@ -78,7 +79,9 @@ const MatatuAgent: React.FC<AgentProps> = ({ startX, startZ }) => {
       s.progress += (MATATU_SPEED * delta) / TILE_SIZE; 
       
       if (s.progress >= 1) {
-        // Arrived
+        // Arrived at target
+        s.lastX = s.currentX;
+        s.lastZ = s.currentZ;
         s.currentX = s.targetX;
         s.currentZ = s.targetZ;
         s.progress = 0;
@@ -110,13 +113,20 @@ const MatatuAgent: React.FC<AgentProps> = ({ startX, startZ }) => {
         { x: s.currentX, z: s.currentZ - 1 },
       ].filter(n => tiles[`${n.x},${n.z}`]?.type === 'road');
 
-      // Filter out backtracking if possible (unless dead end)
-      // Note: This needs history tracking to be perfect, but simple heuristic: don't go back to targetX/targetZ 
-      // is not applicable here because targetX IS currentX now.
+      // Filter out "Backwards" move unless dead end
+      const forwardMoves = neighbors.filter(n => !(n.x === s.lastX && n.z === s.lastZ));
       
-      if (neighbors.length > 0) {
-        const next = neighbors[Math.floor(Math.random() * neighbors.length)];
-        
+      // Decision
+      let next: {x: number, z: number} | null = null;
+      
+      if (forwardMoves.length > 0) {
+          next = forwardMoves[Math.floor(Math.random() * forwardMoves.length)];
+      } else if (neighbors.length > 0) {
+          // Dead end, must turn back
+          next = neighbors[0];
+      }
+      
+      if (next) {
         s.targetX = next.x;
         s.targetZ = next.z;
         s.isMoving = true;
