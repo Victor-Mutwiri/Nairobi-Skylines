@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 // Define the types of buildings available
-export type BuildingType = 'residential' | 'commercial' | 'industrial' | 'road' | 'park';
+export type BuildingType = 'runda_house' | 'kiosk' | 'apartment' | 'acacia' | 'road';
 
 // Data stored for a single tile
 export interface TileData {
@@ -31,17 +31,49 @@ export const useCityStore = create<CityState>((set) => ({
   addBuilding: (x, z, type) => set((state) => {
     const key = `${x},${z}`;
     
-    // Prevent building if tile is occupied (for now, simplistic)
+    // Prevent building if tile is occupied
     if (state.tiles[key]) {
       return state;
     }
 
-    // Cost logic could go here, but keeping it simple for now
+    // Update Tiles
+    const newTiles = {
+      ...state.tiles,
+      [key]: { type, x, z, rotation: 0 }
+    };
+
+    // Simple Population/Money Logic based on building type
+    let newPopulation = state.population;
+    let cost = 0;
+
+    switch (type) {
+      case 'runda_house':
+        cost = 5000;
+        newPopulation += 5;
+        break;
+      case 'apartment':
+        cost = 20000;
+        newPopulation += 50;
+        break;
+      case 'kiosk':
+        cost = 2000;
+        break;
+      case 'acacia':
+        cost = 1000;
+        break;
+      case 'road':
+        cost = 500;
+        break;
+    }
+
+    if (state.money < cost) {
+      return state; // Not enough money
+    }
+
     return {
-      tiles: {
-        ...state.tiles,
-        [key]: { type, x, z, rotation: 0 }
-      }
+      money: state.money - cost,
+      population: newPopulation,
+      tiles: newTiles
     };
   }),
 
