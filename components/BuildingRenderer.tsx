@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { BuildingType } from '../store/useCityStore';
+import { BuildingType, useCityStore } from '../store/useCityStore';
 import * as THREE from 'three';
 
 // Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
@@ -42,6 +42,7 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
   isOverlay = false
 }) => {
   const rotationY = rotation * (Math.PI / 2);
+  const isNight = useCityStore(state => state.isNight);
 
   const getMatColor = (color: string, isUtility: boolean = false) => {
       if (!isOverlay) return color;
@@ -50,7 +51,16 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
   };
 
   const getEmissive = (color: string, intensity: number, isUtility: boolean = false) => {
-      if (!isOverlay) return { emissive: color, emissiveIntensity: intensity };
+      if (!isOverlay) {
+          // Normal mode: Emissive if night, or if utility (like Bar/Police lights)
+          if (isUtility) return { emissive: color, emissiveIntensity: intensity };
+          
+          // Night time logic for general buildings
+          if (isNight) return { emissive: color, emissiveIntensity: intensity * 0.5 };
+          
+          return { emissive: "#000000", emissiveIntensity: 0 };
+      }
+      // Overlay mode:
       if (isUtility) return { emissive: color, emissiveIntensity: intensity };
       return { emissive: "#000000", emissiveIntensity: 0 };
   };
@@ -117,7 +127,8 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
             </mesh>
             <mesh position={[0, 8, 0]}>
               <cylinderGeometry args={[0.1, 0.1, 1, 8]} />
-              <meshStandardMaterial color={getMatColor("#475569")} />
+              {/* Helipad lights up slightly at night */}
+              <meshStandardMaterial color={getMatColor("#475569")} {...getEmissive("#ffffff", isNight ? 0.2 : 0, false)} />
             </mesh>
           </group>
         );
@@ -131,7 +142,8 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
             </mesh>
             <mesh position={[-1, 5, 0]} castShadow>
               <boxGeometry args={[0.5, 10.5, 1.5]} />
-              <meshStandardMaterial color={getMatColor("#ffffff")} />
+              {/* Spine lights up white at night */}
+              <meshStandardMaterial color={getMatColor("#ffffff")} {...getEmissive("#ffffff", isNight ? 0.8 : 0, false)} />
             </mesh>
           </group>
         );
@@ -197,11 +209,11 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
              </mesh>
              <mesh position={[-1, 3.1, 0]}>
                 <boxGeometry args={[0.5, 0.2, 0.5]} />
-                <meshStandardMaterial color="#dc2626" {...getEmissive("#dc2626", 0.5)} />
+                <meshStandardMaterial color="#dc2626" {...getEmissive("#dc2626", 0.8, true)} />
              </mesh>
              <mesh position={[1, 3.1, 0]}>
                 <boxGeometry args={[0.5, 0.2, 0.5]} />
-                <meshStandardMaterial color="#2563eb" {...getEmissive("#2563eb", 0.5)} />
+                <meshStandardMaterial color="#2563eb" {...getEmissive("#2563eb", 0.8, true)} />
              </mesh>
           </group>
         );
@@ -215,7 +227,7 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
              </mesh>
              <mesh position={[0, 2.5, 0]}>
                 <boxGeometry args={[2.6, 0.1, 2.6]} />
-                <meshStandardMaterial color={getMatColor("#d8b4fe")} {...getEmissive("#a855f7", 1)} />
+                <meshStandardMaterial color={getMatColor("#d8b4fe")} {...getEmissive("#a855f7", 1, true)} />
              </mesh>
              <mesh position={[0, 0.8, 1.3]}>
                 <boxGeometry args={[1, 1.6, 0.1]} />
@@ -223,7 +235,7 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
              </mesh>
              <mesh position={[0, 1.7, 1.35]}>
                 <boxGeometry args={[1.2, 0.1, 0.1]} />
-                <meshStandardMaterial color={getMatColor("#f0abfc")} {...getEmissive("#e879f9", 2)} />
+                <meshStandardMaterial color={getMatColor("#f0abfc")} {...getEmissive("#e879f9", 2, true)} />
              </mesh>
           </group>
         );
@@ -249,7 +261,7 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
              {/* Smokestack 1 Rim */}
              <mesh position={[1, 5.8, 1]}>
                 <cylinderGeometry args={[0.5, 0.5, 0.4, 16]} />
-                <meshStandardMaterial color={getMatColor("#dc2626", true)} />
+                <meshStandardMaterial color={getMatColor("#dc2626", true)} {...getEmissive("#dc2626", 0.5, true)} />
              </mesh>
              {/* Smokestack 2 */}
              <mesh position={[1, 2.5, -1]}>

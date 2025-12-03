@@ -155,6 +155,9 @@ interface CityState {
   powerDemand: number;
   isPowerOverlay: boolean;
 
+  // Time System
+  isNight: boolean;
+
   tiles: Record<string, TileData>; 
   activeTool: BuildingType | null;
 
@@ -166,6 +169,7 @@ interface CityState {
   // Actions
   setActiveTool: (tool: BuildingType | null) => void;
   togglePowerOverlay: () => void;
+  setIsNight: (isNight: boolean) => void;
   addBuilding: (x: number, z: number, type: BuildingType) => void;
   removeBuilding: (x: number, z: number) => void;
   updateMoney: (amount: number) => void;
@@ -186,6 +190,7 @@ const DEFAULT_STATE = {
   powerCapacity: 0,
   powerDemand: 0,
   isPowerOverlay: false,
+  isNight: false,
   tiles: {},
   tickCount: 0,
   kickbackRevenue: 0,
@@ -215,6 +220,8 @@ export const useCityStore = create<CityState>((set, get) => ({
   setActiveTool: (tool) => set({ activeTool: tool }),
   
   togglePowerOverlay: () => set((state) => ({ isPowerOverlay: !state.isPowerOverlay })),
+  
+  setIsNight: (isNight) => set({ isNight }),
 
   addBuilding: (x, z, type) => set((state) => {
     const key = `${x},${z}`;

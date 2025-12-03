@@ -12,6 +12,7 @@ const coneGeo = new THREE.ConeGeometry(1, 1, 4);
 
 // Reusable Material (White base to allow tinting via Instance color prop)
 const whiteMat = new THREE.MeshStandardMaterial({ color: "#ffffff" });
+const windowMat = new THREE.MeshBasicMaterial({ color: "#FCD116" }); // Emissive Yellow
 
 export const InstancedBuildings: React.FC = () => {
   // Explicitly cast tiles to Record<string, TileData> to fix inference issues
@@ -19,6 +20,7 @@ export const InstancedBuildings: React.FC = () => {
   const isPowerOverlay = useCityStore((state) => state.isPowerOverlay);
   const powerCapacity = useCityStore((state) => state.powerCapacity);
   const powerDemand = useCityStore((state) => state.powerDemand);
+  const isNight = useCityStore((state) => state.isNight);
 
   // Group tiles by type for instancing
   const { houses, kiosks, apartments, trees } = useMemo(() => {
@@ -58,6 +60,9 @@ export const InstancedBuildings: React.FC = () => {
     return overlayGray; // Gray out everything else
   };
 
+  // Window Logic: Visible only at night and if powered
+  const showWindows = isNight && isPowered;
+
   return (
     <group>
       {/* --- RUNDA HOUSES --- */}
@@ -95,6 +100,19 @@ export const InstancedBuildings: React.FC = () => {
           />
         ))}
       </Instances>
+      
+      {/* House Windows (Lit at Night) */}
+      {showWindows && (
+        <Instances range={1000} geometry={boxGeo} material={windowMat}>
+            {houses.map((t) => (
+            <Instance
+                key={`house-win-${t.x}-${t.z}`}
+                position={[t.x * TILE_SIZE + TILE_SIZE / 2 + 0.5, 1.2, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.3]}
+                scale={[0.8, 0.8, 0.1]}
+            />
+            ))}
+        </Instances>
+      )}
 
 
       {/* --- KIOSKS --- */}
@@ -145,6 +163,32 @@ export const InstancedBuildings: React.FC = () => {
           />
         ))}
       </Instances>
+      
+      {/* Apartment Windows (Lit at Night) */}
+      {showWindows && (
+        <Instances range={3000} geometry={boxGeo} material={windowMat}>
+            {apartments.flatMap((t) => [
+                // Front Row Top
+                <Instance
+                    key={`apt-win-1-${t.x}-${t.z}`}
+                    position={[t.x * TILE_SIZE + TILE_SIZE / 2, 5, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.45]}
+                    scale={[2, 0.8, 0.1]}
+                />,
+                // Front Row Mid
+                <Instance
+                    key={`apt-win-2-${t.x}-${t.z}`}
+                    position={[t.x * TILE_SIZE + TILE_SIZE / 2, 3, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.45]}
+                    scale={[2, 0.8, 0.1]}
+                />,
+                // Front Row Low
+                <Instance
+                    key={`apt-win-3-${t.x}-${t.z}`}
+                    position={[t.x * TILE_SIZE + TILE_SIZE / 2, 1, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.45]}
+                    scale={[2, 0.8, 0.1]}
+                />
+            ])}
+        </Instances>
+      )}
 
 
       {/* --- TREES --- */}
