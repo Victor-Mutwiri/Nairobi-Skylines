@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase } from 'lucide-react';
+import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
 import TenderModal from '../components/TenderModal';
@@ -10,6 +10,7 @@ const GameScreen: React.FC = () => {
   const navigate = useNavigate();
   const [loadingStep, setLoadingStep] = useState(0);
   const [incomeNotification, setIncomeNotification] = useState<{ amount: number; id: number } | null>(null);
+  const [saveNotification, setSaveNotification] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   
   // Connect to store
@@ -22,6 +23,7 @@ const GameScreen: React.FC = () => {
   const setActiveTool = useCityStore((state) => state.setActiveTool);
   const runGameTick = useCityStore((state) => state.runGameTick);
   const activeEvent = useCityStore((state) => state.activeEvent);
+  const saveGame = useCityStore((state) => state.saveGame);
 
   const steps = [
     "Initializing Low Poly Engine...",
@@ -57,6 +59,12 @@ const GameScreen: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [loadingStep, steps.length, isPaused, runGameTick, activeEvent]);
+
+  const handleSave = () => {
+    saveGame();
+    setSaveNotification(true);
+    setTimeout(() => setSaveNotification(false), 2500);
+  };
 
   const isLoading = loadingStep < steps.length;
 
@@ -176,6 +184,17 @@ const GameScreen: React.FC = () => {
             </div>
 
             <div className="flex gap-2 ml-4">
+               {/* Save Button */}
+               <Button 
+                size="sm" 
+                variant="secondary"
+                onClick={handleSave}
+                className="w-10 h-10 p-0 rounded-full flex items-center justify-center shadow-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white"
+                title="Save City"
+              >
+                <Save className="w-5 h-5" />
+              </Button>
+
               <Button 
                 size="sm" 
                 variant={isPaused ? "primary" : "secondary"}
@@ -189,6 +208,14 @@ const GameScreen: React.FC = () => {
               </Button>
             </div>
           </div>
+          
+           {/* Save Notification Toast */}
+           {saveNotification && (
+            <div className="absolute top-24 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300">
+              <CheckCircle className="w-5 h-5" />
+              <span className="font-bold">City Saved Successfully</span>
+            </div>
+           )}
 
           {/* Bottom Bar: Building Tools */}
           <div className="flex flex-col gap-4 pointer-events-auto">

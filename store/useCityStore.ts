@@ -133,20 +133,42 @@ interface CityState {
   updateMoney: (amount: number) => void;
   runGameTick: () => number; // Returns net income
   resolveTender: (choice: 'standard' | 'bribe') => void;
+  saveGame: () => void;
 }
 
-export const useCityStore = create<CityState>((set, get) => ({
-  money: 50000, // Starting budget (KES)
+const SAVE_KEY = 'nairobi_skylines_save_v1';
+
+const DEFAULT_STATE = {
+  money: 50000,
   population: 0,
-  happiness: 50, // Base happiness
+  happiness: 50,
   insecurity: 0,
   corruption: 0,
   tiles: {},
-  activeTool: null,
-  
   tickCount: 0,
-  activeEvent: null,
   kickbackRevenue: 0,
+};
+
+// Helper to load initial state synchronously
+const loadInitialState = () => {
+  try {
+    const saved = localStorage.getItem(SAVE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Merge with default to ensure new fields are present if schema updates
+      return { ...DEFAULT_STATE, ...parsed };
+    }
+  } catch (e) {
+    console.error("Failed to load save game:", e);
+  }
+  return DEFAULT_STATE;
+};
+
+export const useCityStore = create<CityState>((set, get) => ({
+  ...loadInitialState(), // Initialize from LocalStorage
+  
+  activeTool: null,
+  activeEvent: null,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
 
@@ -174,9 +196,6 @@ export const useCityStore = create<CityState>((set, get) => ({
     // Calculate new Population immediately (additive)
     const newPopulation = state.population + (buildingConfig.population || 0);
     
-    // NOTE: Happiness, Insecurity, Corruption are recalculated during the Game Tick
-    // to ensure complex rules (adjacency, global counts) are applied consistently.
-
     return {
       money: state.money - buildingConfig.cost,
       population: newPopulation,
@@ -187,9 +206,6 @@ export const useCityStore = create<CityState>((set, get) => ({
   removeBuilding: (x, z) => set((state) => {
     const key = `${x},${z}`;
     const newTiles = { ...state.tiles };
-    
-    // Optional: Refund logic could go here
-    
     delete newTiles[key];
     return { tiles: newTiles };
   }),
@@ -276,40 +292,14 @@ export const useCityStore = create<CityState>((set, get) => ({
     });
 
     // Finalize Insecurity (Base - Police Mitigation)
-    // Each station reduces insecurity by 5
     calcInsecurity = Math.max(0, baseInsecurity - (policeCount * 5));
 
-    // Finalize Corruption
-    // Add base corruption from kiosks + persistent corruption from events (stored in state.corruption is tricky if we overwrite it)
-    // Current strategy: Recalculate dynamic corruption from buildings, then ADD state-based corruption (from events).
-    // To do this correctly without infinite growth, we need to separate "Building Corruption" from "Event Corruption".
-    // For now, let's assume `state.corruption` tracks the event-based permanent corruption, and we add the kiosk count to it for display/happiness.
-    // However, state.corruption is currently overwritten in the prev implementation.
-    // FIX: We will treat `state.corruption` as the 'Base/Event' corruption. We won't overwrite it, we will just return a derived value or update a `displayCorruption`?
-    // Actually, simpler: Let's make `corruption` in state be the *total*.
-    // But we need to know how much comes from buildings vs events.
-    // For this step, I will simplify: Corruption = Kiosks + (Legacy Corruption from Bribes).
-    // I need to store `legacyCorruption` separately if I want to re-calculate every tick.
-    // OR: Just don't reset corruption every tick?
-    // The current pattern `calcCorruption = 0; ... loop ... set({ corruption: calcCorruption })` wipes event progress.
-    
-    // REFACTORING LOGIC for Persistence:
-    // We'll calculate `buildingCorruption`.
-    // We'll have a `baseCorruption` state variable (added implicitly via logic below).
-    // Actually, let's assume `state.corruption` holds the TOTAL.
-    // But `runGameTick` rebuilds stats from scratch.
-    // We need a variable for `eventCorruption` in the store. 
-    // Since I can't easily change the interface in the middle of this block without a full rewrite,
-    // I will use `kickbackRevenue` as a proxy for corruption level from bribes (since bribes add revenue).
-    // 1 Bribe = +10 Corruption and +500 Revenue. So Corruption from Bribes ~= kickbackRevenue / 50.
-    
+    // Finalize Corruption (Bribes + Kiosks)
     const eventCorruption = Math.floor(state.kickbackRevenue / 50); 
     const totalCorruption = calcCorruption + eventCorruption;
 
     // Finalize Happiness
-    // Penalties: Corruption, Insecurity, Noise
     calcHappiness = calcHappiness - totalCorruption - calcInsecurity - happinessPenalty;
-    // Clamp Happiness
     calcHappiness = Math.max(0, Math.min(100, calcHappiness));
 
     // Add Kickback Revenue
@@ -318,8 +308,6 @@ export const useCityStore = create<CityState>((set, get) => ({
     const netIncome = totalRevenue - totalUpkeep;
     
     // Event Trigger Logic
-    // Trigger every 24 ticks (approx 2 minutes at 5s/tick)
-    // Only trigger if no event is active
     const newTickCount = state.tickCount + 1;
     let newEvent = state.activeEvent;
     
@@ -337,5 +325,25 @@ export const useCityStore = create<CityState>((set, get) => ({
     });
     
     return netIncome;
+  },
+
+  saveGame: () => {
+    const state = get();
+    const dataToSave = {
+      money: state.money,
+      population: state.population,
+      happiness: state.happiness,
+      insecurity: state.insecurity,
+      corruption: state.corruption,
+      tiles: state.tiles,
+      tickCount: state.tickCount,
+      kickbackRevenue: state.kickbackRevenue
+    };
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(dataToSave));
+      console.log("Game Saved Successfully");
+    } catch (e) {
+      console.error("Failed to save game", e);
+    }
   }
 }));
