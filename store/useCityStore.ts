@@ -1,7 +1,17 @@
+
 import { create } from 'zustand';
 
 // Define the types of buildings available
-export type BuildingType = 'runda_house' | 'kiosk' | 'apartment' | 'acacia' | 'road';
+export type BuildingType = 
+  | 'runda_house' 
+  | 'kiosk' 
+  | 'apartment' 
+  | 'acacia' 
+  | 'road'
+  | 'kicc'
+  | 'times_tower'
+  | 'jamia_mosque'
+  | 'uhuru_park';
 
 // Data stored for a single tile
 export interface TileData {
@@ -63,6 +73,22 @@ export const useCityStore = create<CityState>((set) => ({
         break;
       case 'road':
         cost = 500;
+        break;
+      case 'kicc':
+        cost = 100000;
+        newPopulation += 100; // Tourism/Gov jobs
+        break;
+      case 'times_tower':
+        cost = 80000;
+        newPopulation += 150; // Corporate jobs
+        break;
+      case 'jamia_mosque':
+        cost = 40000;
+        // Cultural value
+        break;
+      case 'uhuru_park':
+        cost = 10000;
+        // Happiness value
         break;
     }
 

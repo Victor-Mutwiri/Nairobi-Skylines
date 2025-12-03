@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { BuildingType } from '../store/useCityStore';
 
@@ -10,6 +11,8 @@ declare module 'react' {
       boxGeometry: any;
       cylinderGeometry: any;
       coneGeometry: any;
+      sphereGeometry: any;
+      planeGeometry: any;
       meshStandardMaterial: any;
     }
   }
@@ -134,6 +137,98 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = ({ type, positi
             </mesh>
         </group>
       );
+
+    case 'kicc':
+        return (
+          <group position={position} rotation={[0, rotationY, 0]}>
+            {/* Podium */}
+            <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+              <boxGeometry args={[3.5, 1, 3.5]} />
+              <meshStandardMaterial color="#92400e" />
+            </mesh>
+            {/* Main Cylinder Tower */}
+            <mesh position={[0, 4, 0]} castShadow>
+              <cylinderGeometry args={[1, 1, 7, 16]} />
+              <meshStandardMaterial color="#b45309" /> {/* Terracotta */}
+            </mesh>
+            {/* Top Saucer (Helipad) */}
+            <mesh position={[0, 7.5, 0]} castShadow>
+              <cylinderGeometry args={[1.8, 0.2, 0.2, 16]} />
+              <meshStandardMaterial color="#78350f" />
+            </mesh>
+            {/* Antenna */}
+            <mesh position={[0, 8, 0]}>
+              <cylinderGeometry args={[0.1, 0.1, 1, 8]} />
+              <meshStandardMaterial color="#475569" />
+            </mesh>
+          </group>
+        );
+  
+      case 'times_tower':
+        return (
+          <group position={position} rotation={[0, rotationY, 0]}>
+            {/* Main Glass Monolith */}
+            <mesh position={[0.2, 5, 0]} castShadow receiveShadow>
+              <boxGeometry args={[2, 10, 2]} />
+              <meshStandardMaterial color="#94a3b8" metalness={0.5} roughness={0.2} />
+            </mesh>
+            {/* White Spine */}
+            <mesh position={[-1, 5, 0]} castShadow>
+              <boxGeometry args={[0.5, 10.5, 1.5]} />
+              <meshStandardMaterial color="#ffffff" />
+            </mesh>
+          </group>
+        );
+  
+      case 'jamia_mosque':
+        return (
+          <group position={position} rotation={[0, rotationY, 0]}>
+            {/* Main Building */}
+            <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
+              <boxGeometry args={[3, 3, 3]} />
+              <meshStandardMaterial color="#f1f5f9" />
+            </mesh>
+            {/* Green Dome (Hemisphere) */}
+            <mesh position={[0, 3, 0]} castShadow>
+              <sphereGeometry args={[1.2, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+              <meshStandardMaterial color="#15803d" />
+            </mesh>
+            {/* Minarets */}
+            <mesh position={[1.3, 2.5, 1.3]} castShadow>
+              <cylinderGeometry args={[0.2, 0.2, 5, 8]} />
+              <meshStandardMaterial color="#f1f5f9" />
+            </mesh>
+            <mesh position={[-1.3, 2.5, 1.3]} castShadow>
+              <cylinderGeometry args={[0.2, 0.2, 5, 8]} />
+              <meshStandardMaterial color="#f1f5f9" />
+            </mesh>
+          </group>
+        );
+  
+      case 'uhuru_park':
+        return (
+          <group position={position} rotation={[0, rotationY, 0]}>
+             {/* Grass Base */}
+            <mesh position={[0, 0.1, 0]} receiveShadow>
+              <boxGeometry args={[4, 0.2, 4]} />
+              <meshStandardMaterial color="#4d7c0f" />
+            </mesh>
+            {/* Lake */}
+            <mesh position={[0.5, 0.15, -0.5]} rotation={[-Math.PI / 2, 0, 0]}>
+               <planeGeometry args={[2, 2]} />
+               <meshStandardMaterial color="#0ea5e9" metalness={0.1} roughness={0.1} />
+            </mesh>
+            {/* A couple of small trees */}
+            <mesh position={[-1, 0.5, 1]}>
+               <cylinderGeometry args={[0.1, 0.1, 0.8, 8]} />
+               <meshStandardMaterial color="#3f6212" />
+            </mesh>
+            <mesh position={[-1, 1, 1]}>
+               <coneGeometry args={[0.5, 1, 8]} />
+               <meshStandardMaterial color="#3f6212" />
+            </mesh>
+          </group>
+        );
 
     default:
       return null;
