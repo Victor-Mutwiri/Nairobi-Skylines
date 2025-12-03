@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { BuildingType } from '../store/useCityStore';
 
@@ -289,6 +288,61 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = ({
                <coneGeometry args={[0.5, 1, 8]} />
                <meshStandardMaterial color="#3f6212" />
             </mesh>
+          </group>
+        );
+
+      case 'police_station':
+        return (
+          <group position={position} rotation={[0, rotationY, 0]}>
+             {/* Main Building - White */}
+             <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
+                <boxGeometry args={[3, 3, 2]} />
+                <meshStandardMaterial color="#f8fafc" />
+             </mesh>
+             {/* Blue Stripe */}
+             <mesh position={[0, 1.5, 1.05]}>
+                <boxGeometry args={[3.1, 0.5, 0.1]} />
+                <meshStandardMaterial color="#2563eb" />
+             </mesh>
+             {/* Sign */}
+             <mesh position={[0, 2.5, 1.05]}>
+                <boxGeometry args={[1, 0.5, 0.1]} />
+                <meshStandardMaterial color="#1e3a8a" />
+             </mesh>
+             {/* Siren Lights */}
+             <mesh position={[-1, 3.1, 0]}>
+                <boxGeometry args={[0.5, 0.2, 0.5]} />
+                <meshStandardMaterial color="#dc2626" emissive="#dc2626" emissiveIntensity={0.5} />
+             </mesh>
+             <mesh position={[1, 3.1, 0]}>
+                <boxGeometry args={[0.5, 0.2, 0.5]} />
+                <meshStandardMaterial color="#2563eb" emissive="#2563eb" emissiveIntensity={0.5} />
+             </mesh>
+          </group>
+        );
+
+      case 'bar':
+        return (
+          <group position={position} rotation={[0, rotationY, 0]}>
+             {/* Dark Building */}
+             <mesh position={[0, 1.25, 0]} castShadow receiveShadow>
+                <boxGeometry args={[2.5, 2.5, 2.5]} />
+                <meshStandardMaterial color="#1e1b4b" />
+             </mesh>
+             {/* Neon Trim */}
+             <mesh position={[0, 2.5, 0]}>
+                <boxGeometry args={[2.6, 0.1, 2.6]} />
+                <meshStandardMaterial color="#d8b4fe" emissive="#a855f7" emissiveIntensity={1} />
+             </mesh>
+             {/* Entrance with Neon */}
+             <mesh position={[0, 0.8, 1.3]}>
+                <boxGeometry args={[1, 1.6, 0.1]} />
+                <meshStandardMaterial color="#000000" />
+             </mesh>
+             <mesh position={[0, 1.7, 1.35]}>
+                <boxGeometry args={[1.2, 0.1, 0.1]} />
+                <meshStandardMaterial color="#f0abfc" emissive="#e879f9" emissiveIntensity={2} />
+             </mesh>
           </group>
         );
 

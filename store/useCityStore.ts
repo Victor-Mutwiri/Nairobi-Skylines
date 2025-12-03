@@ -10,14 +10,16 @@ export type BuildingType =
   | 'kicc'
   | 'times_tower'
   | 'jamia_mosque'
-  | 'uhuru_park';
+  | 'uhuru_park'
+  | 'police_station'
+  | 'bar';
 
 // Centralized Configuration for Buildings
 export const BUILDING_COSTS: Record<BuildingType, { 
   cost: number; 
   label: string; 
   population?: number; 
-  happiness?: number;
+  happiness?: number; // Base happiness bonus
   revenue?: number; // Income generated per tick (Tax)
   upkeep?: number; // Cost per tick (Maintenance)
   description: string;
@@ -33,14 +35,14 @@ export const BUILDING_COSTS: Record<BuildingType, {
     cost: 2000, 
     label: 'Kiosk',
     revenue: 25,
-    description: 'Small commercial unit. Generates small income.'
+    description: 'Small business. Adds +1 Corruption.'
   },
   'apartment': { 
     cost: 20000, 
     label: 'Apartment', 
     population: 50,
     revenue: 200,
-    description: 'High density residential block. High tax revenue.'
+    description: 'High density residential. High tax revenue.'
   },
   'acacia': { 
     cost: 1000, 
@@ -52,7 +54,7 @@ export const BUILDING_COSTS: Record<BuildingType, {
   'road': { 
     cost: 500, 
     label: 'Road',
-    upkeep: 2, // Roads cost money to maintain!
+    upkeep: 2, 
     description: 'Basic infrastructure. Costs upkeep.'
   },
   'kicc': { 
@@ -61,14 +63,14 @@ export const BUILDING_COSTS: Record<BuildingType, {
     population: 100, 
     happiness: 10,
     upkeep: 500,
-    revenue: 200, // Tourism income?
+    revenue: 200,
     description: 'Iconic conference center. High maintenance.'
   },
   'times_tower': { 
     cost: 80000, 
     label: 'Times Tower', 
     population: 150,
-    revenue: 1000, // Corporate tax
+    revenue: 1000, 
     description: 'Corporate headquarters. Huge tax generator.'
   },
   'jamia_mosque': { 
@@ -85,6 +87,18 @@ export const BUILDING_COSTS: Record<BuildingType, {
     upkeep: 200,
     description: 'The green lung of the city. Costs upkeep.'
   },
+  'police_station': {
+    cost: 15000,
+    label: 'Police Station',
+    upkeep: 500,
+    description: 'Reduces Insecurity by 5.'
+  },
+  'bar': {
+    cost: 5000,
+    label: 'Club/Bar',
+    revenue: 100, // High income
+    description: 'High income. Noise reduces happiness of neighbors.'
+  }
 };
 
 // Data stored for a single tile
@@ -92,7 +106,7 @@ export interface TileData {
   type: BuildingType;
   x: number;
   z: number;
-  rotation: number; // 0, 1, 2, 3 (multipliers of 90 degrees)
+  rotation: number; 
 }
 
 // Main State Interface
@@ -100,7 +114,9 @@ interface CityState {
   money: number;
   population: number;
   happiness: number;
-  tiles: Record<string, TileData>; // Key format: "x,z" (e.g., "5,-3")
+  insecurity: number;
+  corruption: number;
+  tiles: Record<string, TileData>; 
   activeTool: BuildingType | null;
   
   // Actions
@@ -114,7 +130,9 @@ interface CityState {
 export const useCityStore = create<CityState>((set, get) => ({
   money: 50000, // Starting budget (KES)
   population: 0,
-  happiness: 75,
+  happiness: 50, // Base happiness
+  insecurity: 0,
+  corruption: 0,
   tiles: {},
   activeTool: null,
 
@@ -141,14 +159,15 @@ export const useCityStore = create<CityState>((set, get) => ({
       [key]: { type, x, z, rotation: 0 }
     };
 
-    // Calculate new stats
+    // Calculate new Population immediately (additive)
     const newPopulation = state.population + (buildingConfig.population || 0);
-    const newHappiness = Math.min(100, state.happiness + (buildingConfig.happiness || 0));
+    
+    // NOTE: Happiness, Insecurity, Corruption are recalculated during the Game Tick
+    // to ensure complex rules (adjacency, global counts) are applied consistently.
 
     return {
       money: state.money - buildingConfig.cost,
       population: newPopulation,
-      happiness: newHappiness,
       tiles: newTiles
     };
   }),
@@ -171,17 +190,79 @@ export const useCityStore = create<CityState>((set, get) => ({
     const state = get();
     let totalRevenue = 0;
     let totalUpkeep = 0;
+    
+    let calcCorruption = 0;
+    let calcInsecurity = 0;
+    let calcHappiness = 50; // Start with base happiness
 
-    // Explicitly typing tile to TileData to avoid unknown error
+    let policeCount = 0;
+    let happinessPenalty = 0;
+
+    // Base Insecurity derived from Population (1 insecurity per 10 people)
+    let baseInsecurity = Math.floor(state.population / 10);
+
     Object.values(state.tiles).forEach((tile: TileData) => {
       const config = BUILDING_COSTS[tile.type];
+      
+      // 1. Finances
       if (config.revenue) totalRevenue += config.revenue;
       if (config.upkeep) totalUpkeep += config.upkeep;
+
+      // 2. Base Happiness from Buildings (Parks, Mosques)
+      if (config.happiness) calcHappiness += config.happiness;
+
+      // 3. Corruption Calculation
+      if (tile.type === 'kiosk') {
+        calcCorruption += 1;
+      }
+
+      // 4. Police Count
+      if (tile.type === 'police_station') {
+        policeCount += 1;
+      }
+
+      // 5. Bar Logic (Noise Pollution)
+      if (tile.type === 'bar') {
+         // Check immediate neighbors (North, South, East, West)
+         const neighbors = [
+            {x: tile.x + 1, z: tile.z}, {x: tile.x - 1, z: tile.z},
+            {x: tile.x, z: tile.z + 1}, {x: tile.x, z: tile.z - 1}
+         ];
+         
+         let nearHouse = false;
+         for (const n of neighbors) {
+            const key = `${n.x},${n.z}`;
+            const neighborTile = state.tiles[key];
+            if (neighborTile && (neighborTile.type === 'runda_house' || neighborTile.type === 'apartment')) {
+                nearHouse = true;
+                break;
+            }
+         }
+         
+         if (nearHouse) {
+             happinessPenalty += 1; // Reduces global happiness by 1 per offending bar
+         }
+      }
     });
+
+    // Finalize Insecurity (Base - Police Mitigation)
+    // Each station reduces insecurity by 5
+    calcInsecurity = Math.max(0, baseInsecurity - (policeCount * 5));
+
+    // Finalize Happiness
+    // Penalties: Corruption, Insecurity, Noise
+    calcHappiness = calcHappiness - calcCorruption - calcInsecurity - happinessPenalty;
+    // Clamp Happiness
+    calcHappiness = Math.max(0, Math.min(100, calcHappiness));
 
     const netIncome = totalRevenue - totalUpkeep;
     
-    set({ money: state.money + netIncome });
+    set({ 
+        money: state.money + netIncome,
+        happiness: calcHappiness,
+        insecurity: calcInsecurity,
+        corruption: calcCorruption
+    });
     
     return netIncome;
   }

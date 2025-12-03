@@ -1,7 +1,6 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins } from 'lucide-react';
+import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
 import { useCityStore, BUILDING_COSTS, BuildingType } from '../store/useCityStore';
@@ -16,6 +15,8 @@ const GameScreen: React.FC = () => {
   const money = useCityStore((state) => state.money);
   const population = useCityStore((state) => state.population);
   const happiness = useCityStore((state) => state.happiness);
+  const insecurity = useCityStore((state) => state.insecurity);
+  const corruption = useCityStore((state) => state.corruption);
   const activeTool = useCityStore((state) => state.activeTool);
   const setActiveTool = useCityStore((state) => state.setActiveTool);
   const runGameTick = useCityStore((state) => state.runGameTick);
@@ -94,9 +95,11 @@ const GameScreen: React.FC = () => {
         <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 md:p-6">
           
           {/* Top Bar: Stats */}
-          <div className="flex justify-between items-start pointer-events-auto">
-            <div className="relative bg-slate-900/90 backdrop-blur border border-slate-700 p-2 md:p-3 rounded-xl flex gap-4 md:gap-6 text-white shadow-xl">
-              <div className="flex items-center gap-3">
+          <div className="flex justify-between items-start pointer-events-auto w-full">
+            <div className="relative bg-slate-900/90 backdrop-blur border border-slate-700 p-2 md:p-3 rounded-xl flex gap-3 md:gap-4 text-white shadow-xl overflow-x-auto max-w-[80vw]">
+              
+              {/* Money */}
+              <div className="flex items-center gap-2 md:gap-3 min-w-fit">
                 <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center text-nairobi-yellow">
                     <Coins className="w-4 h-4 md:w-5 md:h-5" />
                 </div>
@@ -108,25 +111,53 @@ const GameScreen: React.FC = () => {
 
                <div className="w-px bg-slate-700 my-1"></div>
 
-              <div className="flex items-center gap-3">
+              {/* Population */}
+              <div className="flex items-center gap-2 md:gap-3 min-w-fit">
                 <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
                     <Users className="w-4 h-4 md:w-5 md:h-5" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Population</span>
+                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Pop</span>
                   <span className="font-display font-bold text-lg md:text-xl">{population.toLocaleString()}</span>
                 </div>
               </div>
 
               <div className="w-px bg-slate-700 my-1"></div>
 
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-nairobi-green">
+              {/* Happiness */}
+              <div className="flex items-center gap-2 md:gap-3 min-w-fit">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${happiness < 40 ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-nairobi-green'}`}>
                     <Smile className="w-4 h-4 md:w-5 md:h-5" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Happiness</span>
+                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Happy</span>
                   <span className="font-display font-bold text-lg md:text-xl">{happiness}%</span>
+                </div>
+              </div>
+
+              <div className="w-px bg-slate-700 my-1"></div>
+
+              {/* Insecurity */}
+              <div className="flex items-center gap-2 md:gap-3 min-w-fit">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${insecurity > 10 ? 'bg-red-500/20 text-red-500' : 'bg-slate-700/50 text-slate-400'}`}>
+                    <ShieldAlert className="w-4 h-4 md:w-5 md:h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Risk</span>
+                  <span className="font-display font-bold text-lg md:text-xl">{insecurity}</span>
+                </div>
+              </div>
+
+              <div className="w-px bg-slate-700 my-1"></div>
+
+              {/* Corruption */}
+              <div className="flex items-center gap-2 md:gap-3 min-w-fit">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${corruption > 5 ? 'bg-orange-500/20 text-orange-500' : 'bg-slate-700/50 text-slate-400'}`}>
+                    <Briefcase className="w-4 h-4 md:w-5 md:h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Graft</span>
+                  <span className="font-display font-bold text-lg md:text-xl">{corruption}</span>
                 </div>
               </div>
 
@@ -141,7 +172,7 @@ const GameScreen: React.FC = () => {
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 ml-4">
               <Button 
                 size="sm" 
                 variant={isPaused ? "primary" : "secondary"}
@@ -192,7 +223,7 @@ const GameScreen: React.FC = () => {
                                 onClick={() => setActiveTool(isActive ? null : type)}
                                 disabled={!canAfford}
                                 className={`
-                                    relative group flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all duration-200 border-2
+                                    relative group flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all duration-200 border-2 min-w-[5rem]
                                     ${isActive 
                                         ? 'bg-nairobi-yellow border-nairobi-yellow text-nairobi-black scale-105 shadow-lg shadow-yellow-500/20' 
                                         : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:border-slate-600'
