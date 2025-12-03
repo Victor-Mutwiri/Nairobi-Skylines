@@ -18,7 +18,9 @@ export type BuildingType =
   | 'bar'
   | 'power_plant'
   | 'dumpsite'
-  | 'informal_settlement';
+  | 'informal_settlement'
+  | 'nbk_tower'
+  | 'reserved'; // Filler for multi-tile buildings
 
 export type ToolType = BuildingType | 'bulldozer';
 export type EventType = 'tender_expressway' | null;
@@ -36,6 +38,8 @@ export const BUILDING_COSTS: Record<BuildingType, {
   powerProduction?: number; // Power generated
   insecurity?: number; // Contribution to insecurity
   description: string;
+  width?: number; // Tiles X
+  depth?: number; // Tiles Z
 }> = {
   'runda_house': { 
     cost: 5000, 
@@ -148,6 +152,21 @@ export const BUILDING_COSTS: Record<BuildingType, {
     insecurity: 5,
     happiness: -5,
     description: 'Unplanned settlement. Hard to remove.'
+  },
+  'nbk_tower': {
+    cost: 500000,
+    label: 'NBK Tower',
+    revenue: 5000,
+    powerConsumption: 100,
+    happiness: 20,
+    width: 2,
+    depth: 2,
+    description: 'The ultimate status symbol. Wins the game. Needs 2x2 space.'
+  },
+  'reserved': {
+    cost: 0,
+    label: 'Reserved',
+    description: 'Occupied space'
   }
 };
 
@@ -156,7 +175,20 @@ export interface TileData {
   type: BuildingType;
   x: number;
   z: number;
-  rotation: number; 
+  rotation: number;
+  parentX?: number; // For multi-tile buildings (reserved tiles point to main)
+  parentZ?: number;
+}
+
+export interface HighScore {
+  id: string;
+  date: string;
+  money: number;
+  population: number;
+  happiness: number;
+  corruption: number;
+  ticks: number;
+  score: number;
 }
 
 // Main State Interface
@@ -184,6 +216,7 @@ interface CityState {
   tickCount: number;
   activeEvent: EventType;
   kickbackRevenue: number; // Income generated from corrupt deals
+  gameWon: boolean;
   
   // Actions
   setActiveTool: (tool: ToolType | null) => void;
@@ -195,9 +228,12 @@ interface CityState {
   runGameTick: () => number; // Returns net income
   resolveTender: (choice: 'standard' | 'bribe') => void;
   saveGame: () => void;
+  saveHighScore: () => void;
+  setGameWon: (won: boolean) => void;
 }
 
 const SAVE_KEY = 'nairobi_skylines_save_v1';
+export const SCORES_KEY = 'nairobi_skylines_highscores';
 
 const DEFAULT_STATE = {
   money: 50000,
@@ -214,6 +250,7 @@ const DEFAULT_STATE = {
   fires: {},
   tickCount: 0,
   kickbackRevenue: 0,
+  gameWon: false,
 };
 
 // Helper to load initial state synchronously
@@ -238,43 +275,85 @@ export const useCityStore = create<CityState>((set, get) => ({
   activeEvent: null,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
+  setGameWon: (won) => set({ gameWon: won }),
   
   togglePowerOverlay: () => set((state) => ({ isPowerOverlay: !state.isPowerOverlay })),
   
   setIsNight: (isNight) => set({ isNight }),
 
   addBuilding: (x, z, type) => set((state) => {
-    const key = `${x},${z}`;
-    
-    // Prevent building if tile is occupied
-    if (state.tiles[key]) {
-      return state;
+    // 1. Check Cost
+    const config = BUILDING_COSTS[type];
+    if (state.money < config.cost) return state;
+
+    // 2. Check Dimensions and Availability
+    const width = config.width || 1;
+    const depth = config.depth || 1;
+    const tilesToOccupy: string[] = [];
+
+    // Grid boundary check and Occupancy check
+    // Assuming grid indices are roughly -10 to 9. We check if key exists.
+    for (let dx = 0; dx < width; dx++) {
+      for (let dz = 0; dz < depth; dz++) {
+        const checkX = x + dx;
+        const checkZ = z + dz;
+        const key = `${checkX},${checkZ}`;
+        
+        // Bounds check (Hardcoded 20x20 centered on 0, limits -10 to 9)
+        if (checkX < -10 || checkX >= 10 || checkZ < -10 || checkZ >= 10) {
+             return state; // Out of bounds
+        }
+
+        if (state.tiles[key]) {
+             return state; // Occupied
+        }
+        tilesToOccupy.push(key);
+      }
     }
 
-    const buildingConfig = BUILDING_COSTS[type];
+    // 3. Place Tiles
+    const newTiles = { ...state.tiles };
 
-    // Check if player has enough money
-    if (state.money < buildingConfig.cost) {
-      return state;
+    // Main Tile
+    newTiles[`${x},${z}`] = { type, x, z, rotation: 0 };
+
+    // Reserved (Filler) Tiles
+    for (let dx = 0; dx < width; dx++) {
+        for (let dz = 0; dz < depth; dz++) {
+            if (dx === 0 && dz === 0) continue; // Skip main tile
+            newTiles[`${x + dx},${z + dz}`] = { 
+                type: 'reserved', 
+                x: x + dx, 
+                z: z + dz, 
+                rotation: 0,
+                parentX: x,
+                parentZ: z
+            };
+        }
     }
 
-    // Update Tiles
-    const newTiles = {
-      ...state.tiles,
-      [key]: { type, x, z, rotation: 0 }
-    };
+    // Check Win Condition immediately
+    const isWin = type === 'nbk_tower';
     
     return {
-      money: state.money - buildingConfig.cost,
-      tiles: newTiles
+      money: state.money - config.cost,
+      tiles: newTiles,
+      gameWon: isWin ? true : state.gameWon
     };
   }),
 
   removeBuilding: (x, z) => set((state) => {
     const key = `${x},${z}`;
-    const tile = state.tiles[key];
+    let tile = state.tiles[key];
     
     if (!tile) return state;
+
+    // Handle Reserved Tiles: redirect to parent
+    if (tile.type === 'reserved' && tile.parentX !== undefined && tile.parentZ !== undefined) {
+        const parentKey = `${tile.parentX},${tile.parentZ}`;
+        tile = state.tiles[parentKey];
+        if (!tile) return state; // Should not happen
+    }
 
     let penaltyHappiness = 0;
     let penaltyCorruption = 0;
@@ -285,8 +364,20 @@ export const useCityStore = create<CityState>((set, get) => ({
        penaltyCorruption = 10;
     }
 
+    // Handle Multi-tile Removal
+    const config = BUILDING_COSTS[tile.type];
+    const width = config.width || 1;
+    const depth = config.depth || 1;
+
     const newTiles = { ...state.tiles };
-    delete newTiles[key];
+
+    // Remove all parts of the building
+    for (let dx = 0; dx < width; dx++) {
+        for (let dz = 0; dz < depth; dz++) {
+            const k = `${tile.x + dx},${tile.z + dz}`;
+            delete newTiles[k];
+        }
+    }
     
     return { 
       tiles: newTiles,
@@ -338,6 +429,8 @@ export const useCityStore = create<CityState>((set, get) => ({
 
     // 1. First Pass: Calculate Capacity and Demand
     Object.values(state.tiles).forEach((tile: TileData) => {
+        if (tile.type === 'reserved') return; // Skip fillers
+
         const config = BUILDING_COSTS[tile.type];
         if (config.powerProduction) calcPowerCapacity += config.powerProduction;
         if (config.powerConsumption) calcPowerDemand += config.powerConsumption;
@@ -351,6 +444,8 @@ export const useCityStore = create<CityState>((set, get) => ({
 
     // 2. Second Pass: Calculate Effects based on Power Status
     Object.values(state.tiles).forEach((tile: TileData) => {
+      if (tile.type === 'reserved') return; // Skip fillers
+
       const config = BUILDING_COSTS[tile.type];
       
       const requiresPower = !!config.powerConsumption;
@@ -439,7 +534,8 @@ export const useCityStore = create<CityState>((set, get) => ({
            const nKey = `${randomNeighbor.x},${randomNeighbor.z}`;
            
            // If neighbor has a building and is not already burning
-           if (state.tiles[nKey] && !newFires[nKey] && state.tiles[nKey].type !== 'road') {
+           const t = state.tiles[nKey];
+           if (t && !newFires[nKey] && t.type !== 'road' && t.type !== 'reserved') {
               newFires[nKey] = 0; // Ignite neighbor
            }
         }
@@ -451,8 +547,8 @@ export const useCityStore = create<CityState>((set, get) => ({
        // Pick random tile
        const randomKey = tileKeys[Math.floor(Math.random() * tileKeys.length)];
        const tile = state.tiles[randomKey];
-       // Roads and empty spots don't burn easily in this simple model, assume buildings burn
-       if (tile.type !== 'road' && !newFires[randomKey]) {
+       // Roads, fillers, and empty spots don't burn easily
+       if (tile.type !== 'road' && tile.type !== 'reserved' && !newFires[randomKey]) {
           newFires[randomKey] = 0;
        }
     }
@@ -519,8 +615,6 @@ export const useCityStore = create<CityState>((set, get) => ({
                  neighbors.forEach(n => {
                      // Check bounds 20x20 centered on 0,0? 
                      // GridSystem uses indices approx -10 to 9. We just check if they are already in tiles map.
-                     // But we must also check grid bounds if we want to be strict. 
-                     // For now, assume if not in map, it's potentially free, but we should bound it.
                      if (n.x >= -10 && n.x < 10 && n.z >= -10 && n.z < 10) {
                          if (isEmpty(n.x, n.z)) {
                              candidates.push(n);
@@ -573,7 +667,8 @@ export const useCityStore = create<CityState>((set, get) => ({
       tiles: state.tiles,
       tickCount: state.tickCount,
       kickbackRevenue: state.kickbackRevenue,
-      fires: state.fires
+      fires: state.fires,
+      gameWon: state.gameWon
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(dataToSave));
@@ -581,5 +676,39 @@ export const useCityStore = create<CityState>((set, get) => ({
     } catch (e) {
       console.error("Failed to save game", e);
     }
+  },
+
+  saveHighScore: () => {
+    const state = get();
+    // Calculate Composite Score
+    // Logic: Money (weighted) + Population * 100 + Happiness * 500
+    const score = Math.floor(state.money + (state.population * 100) + (state.happiness * 500));
+    
+    const newScore: HighScore = {
+        id: Date.now().toString(),
+        date: new Date().toLocaleDateString(),
+        money: state.money,
+        population: state.population,
+        happiness: state.happiness,
+        corruption: state.corruption,
+        ticks: state.tickCount,
+        score: score
+    };
+
+    let scores: HighScore[] = [];
+    try {
+        const raw = localStorage.getItem(SCORES_KEY);
+        if (raw) scores = JSON.parse(raw);
+    } catch(e) { console.error("Error reading high scores", e); }
+
+    scores.push(newScore);
+    // Sort descending by score
+    scores.sort((a, b) => b.score - a.score);
+    // Keep top 5
+    scores = scores.slice(0, 5);
+    
+    try {
+        localStorage.setItem(SCORES_KEY, JSON.stringify(scores));
+    } catch(e) { console.error("Error saving high score", e); }
   }
 }));

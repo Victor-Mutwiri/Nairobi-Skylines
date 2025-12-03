@@ -1,10 +1,12 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle, Zap, Trash2, Hammer } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
 import TenderModal from '../components/TenderModal';
+import WinModal from '../components/WinModal';
 import { useCityStore, BUILDING_COSTS, BuildingType } from '../store/useCityStore';
 
 const GameScreen: React.FC = () => {
@@ -31,6 +33,8 @@ const GameScreen: React.FC = () => {
   const runGameTick = useCityStore((state) => state.runGameTick);
   const activeEvent = useCityStore((state) => state.activeEvent);
   const saveGame = useCityStore((state) => state.saveGame);
+  const saveHighScore = useCityStore((state) => state.saveHighScore);
+  const gameWon = useCityStore((state) => state.gameWon);
 
   const steps = [
     "Initializing Low Poly Engine...",
@@ -49,6 +53,13 @@ const GameScreen: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [loadingStep, steps.length]);
+
+  // Handle Win Condition
+  useEffect(() => {
+    if (gameWon) {
+        saveHighScore();
+    }
+  }, [gameWon, saveHighScore]);
 
   // Game Loop: Ticks every 5 seconds (1 Game Day)
   useEffect(() => {
@@ -312,7 +323,7 @@ const GameScreen: React.FC = () => {
                         <span className="text-[10px] font-bold uppercase leading-none">Demolish</span>
                     </button>
 
-                    {(Object.keys(BUILDING_COSTS) as BuildingType[]).filter(t => t !== 'informal_settlement').map((type) => {
+                    {(Object.keys(BUILDING_COSTS) as BuildingType[]).filter(t => t !== 'informal_settlement' && t !== 'reserved').map((type) => {
                         const config = BUILDING_COSTS[type];
                         const isActive = activeTool === type;
                         const canAfford = money >= config.cost;
@@ -348,6 +359,7 @@ const GameScreen: React.FC = () => {
       
       {/* Modals */}
       <TenderModal />
+      <WinModal />
 
     </div>
   );

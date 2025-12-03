@@ -1,4 +1,5 @@
 
+
 import React, { useMemo } from 'react';
 import { BuildingType, useCityStore } from '../store/useCityStore';
 import * as THREE from 'three';
@@ -374,6 +375,43 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
                 </mesh>
             </group>
         );
+
+    case 'nbk_tower':
+        return (
+          // Visuals offset to center over 2x2 grid. 
+          // 2x2 means total width 8 units. Center is +2, +2 from anchor corner.
+          // Since this renderer is placed at center of Anchor Tile (0,0 relative), we need to shift it x+2, z+2
+          <group position={[position[0] + 2, position[1], position[2] + 2]} rotation={[0, rotationY, 0]}>
+            {/* Main Tower Block */}
+            <mesh position={[0, 6, 0]} castShadow receiveShadow>
+              <boxGeometry args={[5, 12, 5]} />
+              <meshStandardMaterial color={getMatColor("#065f46")} metalness={0.6} roughness={0.1} />
+            </mesh>
+            {/* Gold Accents */}
+            <mesh position={[2.6, 6, 0]}>
+               <boxGeometry args={[0.2, 12, 1]} />
+               <meshStandardMaterial color={getMatColor("#fbbf24")} metalness={1} roughness={0.2} {...getEmissive("#fbbf24", isNight ? 0.3 : 0, true)} />
+            </mesh>
+            <mesh position={[-2.6, 6, 0]}>
+               <boxGeometry args={[0.2, 12, 1]} />
+               <meshStandardMaterial color={getMatColor("#fbbf24")} metalness={1} roughness={0.2} {...getEmissive("#fbbf24", isNight ? 0.3 : 0, true)} />
+            </mesh>
+            {/* Top Crown */}
+            <mesh position={[0, 12.5, 0]}>
+               <boxGeometry args={[5.2, 1, 5.2]} />
+               <meshStandardMaterial color={getMatColor("#047857")} />
+            </mesh>
+            {/* Antenna */}
+            <mesh position={[0, 14, 0]}>
+               <cylinderGeometry args={[0.1, 0.2, 3]} />
+               <meshStandardMaterial color="#ef4444" {...getEmissive("#ef4444", 1, true)} />
+            </mesh>
+          </group>
+        );
+
+    case 'reserved':
+        // Filler tile, render nothing
+        return null;
 
     default:
       return null;

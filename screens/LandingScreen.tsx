@@ -1,11 +1,26 @@
-import React from 'react';
+
+
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Truck, TreePine, Cpu, ArrowRight, MousePointer2 } from 'lucide-react';
+import { Building2, Truck, TreePine, Cpu, ArrowRight, MousePointer2, Trophy, Coins, Users, Smile } from 'lucide-react';
 import NairobiSkyline from '../components/NairobiSkyline';
 import { Button } from '../components/ui/Button';
+import { SCORES_KEY, HighScore } from '../store/useCityStore';
 
 const LandingScreen: React.FC = () => {
   const navigate = useNavigate();
+  const [highScores, setHighScores] = useState<HighScore[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SCORES_KEY);
+      if (raw) {
+        setHighScores(JSON.parse(raw));
+      }
+    } catch (e) {
+      console.error("Failed to load scores", e);
+    }
+  }, []);
 
   const handleStartGame = () => {
     navigate('/game');
@@ -24,7 +39,9 @@ const LandingScreen: React.FC = () => {
           </div>
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Features</a>
-            <a href="#about" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">About</a>
+            {highScores.length > 0 && (
+                <a href="#hall-of-fame" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Hall of Fame</a>
+            )}
             <Button size="sm" onClick={handleStartGame}>Play Beta</Button>
           </div>
         </div>
@@ -69,6 +86,72 @@ const LandingScreen: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Hall of Fame Section (Conditional) */}
+      {highScores.length > 0 && (
+        <section id="hall-of-fame" className="py-20 bg-slate-900/50 relative z-20 border-t border-b border-slate-800">
+           <div className="max-w-5xl mx-auto px-6">
+                <div className="text-center mb-12">
+                   <div className="inline-flex items-center justify-center p-3 bg-nairobi-yellow/10 rounded-full mb-4">
+                        <Trophy className="w-8 h-8 text-nairobi-yellow" />
+                   </div>
+                   <h2 className="text-3xl md:text-4xl font-display font-bold mb-2">Hall of Fame</h2>
+                   <p className="text-slate-400">Top Governors who achieved Tycoon Status</p>
+                </div>
+                
+                <div className="bg-slate-800/40 backdrop-blur-sm border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-900/60 border-b border-slate-700 text-slate-400 text-sm uppercase tracking-wider">
+                                    <th className="p-4 font-semibold">Rank</th>
+                                    <th className="p-4 font-semibold">Date</th>
+                                    <th className="p-4 font-semibold text-right">Score</th>
+                                    <th className="p-4 font-semibold text-right">Population</th>
+                                    <th className="p-4 font-semibold text-right">Happiness</th>
+                                    <th className="p-4 font-semibold text-right">Wealth</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-700/50">
+                                {highScores.map((score, index) => (
+                                    <tr key={score.id} className="hover:bg-slate-700/30 transition-colors">
+                                        <td className="p-4 font-mono text-slate-500">
+                                            {index === 0 ? <span className="text-xl">🥇</span> : 
+                                             index === 1 ? <span className="text-xl">🥈</span> : 
+                                             index === 2 ? <span className="text-xl">🥉</span> : 
+                                             `#${index + 1}`}
+                                        </td>
+                                        <td className="p-4 text-slate-300">{score.date}</td>
+                                        <td className="p-4 text-right font-bold text-nairobi-yellow font-display text-lg">
+                                            {score.score.toLocaleString()}
+                                        </td>
+                                        <td className="p-4 text-right text-slate-300">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Users className="w-4 h-4 text-blue-400" />
+                                                {score.population.toLocaleString()}
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-right text-slate-300">
+                                             <div className="flex items-center justify-end gap-1">
+                                                <Smile className="w-4 h-4 text-green-400" />
+                                                {score.happiness}%
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-right text-slate-300">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Coins className="w-4 h-4 text-yellow-500" />
+                                                {score.money.toLocaleString()}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+           </div>
+        </section>
+      )}
 
       {/* Features Grid */}
       <section id="features" className="py-24 bg-slate-900 relative z-20">
