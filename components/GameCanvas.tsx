@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { GridSystem, TILE_SIZE } from './GridSystem';
 import { useCityStore, TileData } from '../store/useCityStore';
 import { BuildingRenderer, AdjacencyInfo } from './BuildingRenderer';
+import { InstancedBuildings } from './InstancedBuildings';
 import { TrafficSystem } from './TrafficSystem';
 
 // Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
@@ -59,6 +60,10 @@ const GameCanvas: React.FC = () => {
       west: isRoad(x - 1, z),
     };
   };
+
+  // Instanced types are handled by InstancedBuildings.tsx
+  const isInstanced = (type: string) => 
+    ['runda_house', 'kiosk', 'apartment', 'acacia'].includes(type);
 
   return (
     <div className="w-full h-full bg-[#87CEEB]">
@@ -120,8 +125,15 @@ const GameCanvas: React.FC = () => {
           <meshStandardMaterial color="#4f772d" roughness={0.8} />
         </mesh>
 
-        {/* Placed Buildings */}
+        {/* --- RENDERERS --- */}
+
+        {/* 1. Instanced Buildings (High Performance for mass objects) */}
+        <InstancedBuildings />
+
+        {/* 2. Unique/Dynamic Buildings (Roads, Landmarks) */}
         {Object.values(tiles).map((tile: TileData) => {
+          if (isInstanced(tile.type)) return null;
+
           const adjacencies = tile.type === 'road' ? getRoadAdjacency(tile.x, tile.z) : undefined;
           
           return (
