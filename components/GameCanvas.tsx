@@ -8,6 +8,7 @@ import { useCityStore, TileData } from '../store/useCityStore';
 import { BuildingRenderer, AdjacencyInfo } from './BuildingRenderer';
 import { InstancedBuildings } from './InstancedBuildings';
 import { TrafficSystem } from './TrafficSystem';
+import { FireSystem } from './FireSystem';
 
 // Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
 declare module 'react' {
@@ -252,6 +253,9 @@ const GameCanvas: React.FC = () => {
 
         {/* Traffic Simulation */}
         <TrafficSystem />
+
+        {/* Fire Simulation */}
+        <FireSystem />
 
         {/* Interactive Grid System */}
         <GridSystem />

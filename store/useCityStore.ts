@@ -13,6 +13,7 @@ export type BuildingType =
   | 'jamia_mosque'
   | 'uhuru_park'
   | 'police_station'
+  | 'fire_station'
   | 'bar'
   | 'power_plant'
   | 'dumpsite';
@@ -109,6 +110,12 @@ export const BUILDING_COSTS: Record<BuildingType, {
     upkeep: 500,
     description: 'Reduces Insecurity by 5.'
   },
+  'fire_station': {
+    cost: 12000,
+    label: 'Fire Station',
+    upkeep: 300,
+    description: 'Extinguishes nearby fires (Cost: 1000 KES).'
+  },
   'bar': {
     cost: 5000,
     label: 'Club/Bar',
@@ -159,6 +166,7 @@ interface CityState {
   isNight: boolean;
 
   tiles: Record<string, TileData>; 
+  fires: Record<string, number>; // Key: "x,z", Value: duration (ticks)
   activeTool: BuildingType | null;
 
   // Event System State
@@ -192,6 +200,7 @@ const DEFAULT_STATE = {
   isPowerOverlay: false,
   isNight: false,
   tiles: {},
+  fires: {},
   tickCount: 0,
   kickbackRevenue: 0,
 };
@@ -290,16 +299,23 @@ export const useCityStore = create<CityState>((set, get) => ({
     let calcPollution = 0;
     
     let policeCount = 0;
+    const fireStations: {x: number, z: number}[] = [];
     let happinessPenalty = 0;
 
     let calcPowerCapacity = 0;
     let calcPowerDemand = 0;
+
+    const tileKeys = Object.keys(state.tiles);
 
     // 1. First Pass: Calculate Capacity and Demand
     Object.values(state.tiles).forEach((tile: TileData) => {
         const config = BUILDING_COSTS[tile.type];
         if (config.powerProduction) calcPowerCapacity += config.powerProduction;
         if (config.powerConsumption) calcPowerDemand += config.powerConsumption;
+        
+        if (tile.type === 'fire_station') {
+          fireStations.push({x: tile.x, z: tile.z});
+        }
     });
 
     const isPowerSufficient = calcPowerCapacity >= calcPowerDemand;
@@ -349,6 +365,62 @@ export const useCityStore = create<CityState>((set, get) => ({
       }
     });
 
+    // --- FIRE LOGIC ---
+    let newFires = { ...state.fires };
+    let emergencyCost = 0;
+
+    // 1. Extinguish / Update existing fires
+    Object.keys(newFires).forEach(key => {
+      const [fxStr, fzStr] = key.split(',');
+      const fx = parseInt(fxStr);
+      const fz = parseInt(fzStr);
+      
+      // Check if near any fire station (Radius 3)
+      let extinguished = false;
+      for (const station of fireStations) {
+        const dist = Math.abs(station.x - fx) + Math.abs(station.z - fz); // Manhattan distance
+        if (dist <= 3) {
+          extinguished = true;
+          break;
+        }
+      }
+
+      if (extinguished) {
+        delete newFires[key];
+        emergencyCost += 1000;
+      } else {
+        // Fire continues
+        newFires[key] += 1; // Increment duration
+        happinessPenalty += 2; // Fire makes people unhappy
+
+        // Spread logic: If burnt for > 2 ticks, try spread
+        if (newFires[key] > 2) {
+           const neighbors = [
+            {x: fx+1, z: fz}, {x: fx-1, z: fz}, {x: fx, z: fz+1}, {x: fx, z: fz-1}
+           ];
+           const randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
+           const nKey = `${randomNeighbor.x},${randomNeighbor.z}`;
+           
+           // If neighbor has a building and is not already burning
+           if (state.tiles[nKey] && !newFires[nKey] && state.tiles[nKey].type !== 'road') {
+              newFires[nKey] = 0; // Ignite neighbor
+           }
+        }
+      }
+    });
+
+    // 2. Random Ignition (5% chance every 5 ticks)
+    if (state.tickCount % 5 === 0 && Math.random() < 0.05 && tileKeys.length > 0) {
+       // Pick random tile
+       const randomKey = tileKeys[Math.floor(Math.random() * tileKeys.length)];
+       const tile = state.tiles[randomKey];
+       // Roads and empty spots don't burn easily in this simple model, assume buildings burn
+       if (tile.type !== 'road' && !newFires[randomKey]) {
+          newFires[randomKey] = 0;
+       }
+    }
+
+
     // Ensure pollution doesn't go below 0
     calcPollution = Math.max(0, calcPollution);
 
@@ -371,7 +443,7 @@ export const useCityStore = create<CityState>((set, get) => ({
     // Add Kickback Revenue
     totalRevenue += state.kickbackRevenue;
 
-    const netIncome = totalRevenue - totalUpkeep;
+    const netIncome = totalRevenue - totalUpkeep - emergencyCost;
     
     // Event Trigger Logic
     const newTickCount = state.tickCount + 1;
@@ -391,7 +463,8 @@ export const useCityStore = create<CityState>((set, get) => ({
         powerCapacity: calcPowerCapacity,
         powerDemand: calcPowerDemand,
         tickCount: newTickCount,
-        activeEvent: newEvent
+        activeEvent: newEvent,
+        fires: newFires
     });
     
     return netIncome;
@@ -408,7 +481,8 @@ export const useCityStore = create<CityState>((set, get) => ({
       pollution: state.pollution,
       tiles: state.tiles,
       tickCount: state.tickCount,
-      kickbackRevenue: state.kickbackRevenue
+      kickbackRevenue: state.kickbackRevenue,
+      fires: state.fires
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(dataToSave));

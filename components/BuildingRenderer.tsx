@@ -218,6 +218,31 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
           </group>
         );
 
+      case 'fire_station':
+        return (
+            <group position={position} rotation={[0, rotationY, 0]}>
+                {/* Main Body */}
+                <mesh position={[0, 1.25, 0]} castShadow receiveShadow>
+                    <boxGeometry args={[3, 2.5, 3]} />
+                    <meshStandardMaterial color={getMatColor("#b91c1c", true)} />
+                </mesh>
+                {/* Garage Door */}
+                <mesh position={[0, 1, 1.51]}>
+                    <planeGeometry args={[2, 1.8]} />
+                    <meshStandardMaterial color={getMatColor("#4b5563", true)} />
+                </mesh>
+                {/* Siren */}
+                <mesh position={[0, 2.6, 0]}>
+                    <cylinderGeometry args={[0.3, 0.4, 0.4, 8]} />
+                    <meshStandardMaterial color="#ef4444" {...getEmissive("#ef4444", 1, true)} />
+                </mesh>
+                 <mesh position={[0, 2.8, 0]}>
+                    <sphereGeometry args={[0.3]} />
+                    <meshStandardMaterial color="#fca5a5" {...getEmissive("#fca5a5", 1, true)} />
+                </mesh>
+            </group>
+        );
+
       case 'bar':
         return (
           <group position={position} rotation={[0, rotationY, 0]}>
