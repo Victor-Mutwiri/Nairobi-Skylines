@@ -20,6 +20,10 @@ export type BuildingType =
   | 'informal_settlement'
   | 'nbk_tower'
   | 'expressway_pillar'
+  | 'factory'
+  | 'mall'
+  | 'plantation'
+  | 'office'
   | 'reserved';
 
 export type ToolType = BuildingType | 'bulldozer';
@@ -51,6 +55,8 @@ export interface FinancialReport {
   income: {
     residential: number;
     commercial: number;
+    industrial: number; // Added industrial
+    agricultural: number; // Added agricultural
     tolls: number;
     kickbacks: number;
     total: number;
@@ -75,9 +81,11 @@ export interface EconomySlice {
   pollution: number;
   kickbackRevenue: number;
   gameWon: boolean;
+  taxRate: number; // 0.5 to 2.0
   financials: FinancialReport;
   
   updateMoney: (amount: number) => void;
+  setTaxRate: (rate: number) => void;
   resolveTender: (choice: 'standard' | 'bribe' | 'reject') => void;
   saveHighScore: () => void;
   setGameWon: (won: boolean) => void;
@@ -87,7 +95,6 @@ export interface UISlice {
   activeTool: ToolType | null;
   activeEvent: EventType;
   isPowerOverlay: boolean;
-  // isNight removed as requested
   showBudget: boolean;
 
   setActiveTool: (tool: ToolType | null) => void;

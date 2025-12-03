@@ -50,7 +50,7 @@ const GameCanvas: React.FC = () => {
 
   // Instanced types are handled by InstancedBuildings.tsx
   const isInstanced = (type: string) => 
-    ['runda_house', 'kiosk', 'apartment', 'acacia', 'road', 'expressway_pillar'].includes(type);
+    ['runda_house', 'kiosk', 'apartment', 'acacia', 'road', 'expressway_pillar', 'plantation', 'factory', 'mall', 'office'].includes(type);
 
   return (
     <div className="w-full h-full bg-[#87CEEB]">

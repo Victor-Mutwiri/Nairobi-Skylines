@@ -10,8 +10,9 @@ export const createEconomySlice: CitySlice<EconomySlice> = (set, get) => ({
   pollution: 0,
   kickbackRevenue: 0,
   gameWon: false,
+  taxRate: 1.0, // Default 100% (Normal)
   financials: {
-    income: { residential: 0, commercial: 0, tolls: 0, kickbacks: 0, total: 0 },
+    income: { residential: 0, commercial: 0, industrial: 0, agricultural: 0, tolls: 0, kickbacks: 0, total: 0 },
     expenses: { infrastructure: 0, services: 0, emergency: 0, total: 0 },
     net: 0
   },
@@ -19,6 +20,8 @@ export const createEconomySlice: CitySlice<EconomySlice> = (set, get) => ({
   updateMoney: (amount) => set((state) => ({
     money: state.money + amount
   })),
+
+  setTaxRate: (rate) => set({ taxRate: rate }),
 
   resolveTender: (choice) => set((state) => {
     if (choice === 'reject') {

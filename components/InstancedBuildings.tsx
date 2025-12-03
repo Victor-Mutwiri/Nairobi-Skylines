@@ -27,14 +27,18 @@ export const InstancedBuildings: React.FC = () => {
   // Removed isNight hook
 
   // Group tiles by type for instancing
-  const { houses, kiosks, apartments, trees, roads, expressways } = useMemo(() => {
+  const { houses, kiosks, apartments, trees, roads, expressways, plantations, factories, malls, offices } = useMemo(() => {
     const groups = {
       houses: [] as TileData[],
       kiosks: [] as TileData[],
       apartments: [] as TileData[],
       trees: [] as TileData[],
       roads: [] as TileData[],
-      expressways: [] as TileData[]
+      expressways: [] as TileData[],
+      plantations: [] as TileData[],
+      factories: [] as TileData[],
+      malls: [] as TileData[],
+      offices: [] as TileData[]
     };
     
     Object.values(tiles).forEach((tile) => {
@@ -44,6 +48,10 @@ export const InstancedBuildings: React.FC = () => {
       else if (tile.type === 'acacia') groups.trees.push(tile);
       else if (tile.type === 'road') groups.roads.push(tile);
       else if (tile.type === 'expressway_pillar') groups.expressways.push(tile);
+      else if (tile.type === 'plantation') groups.plantations.push(tile);
+      else if (tile.type === 'factory') groups.factories.push(tile);
+      else if (tile.type === 'mall') groups.malls.push(tile);
+      else if (tile.type === 'office') groups.offices.push(tile);
     });
 
     return groups;
@@ -110,13 +118,14 @@ export const InstancedBuildings: React.FC = () => {
     }
     
     // 2. Road Check: Needs road + has access
-    // Trees don't need roads
-    if (tile.type !== 'acacia' && tile.type !== 'road' && tile.type !== 'expressway_pillar' && tile.hasRoadAccess === false) {
+    // Trees and Plantations don't need roads to function (visually), but logic might penalize them.
+    // Let's assume farms are generally OK or visually don't turn orange.
+    if (tile.type !== 'acacia' && tile.type !== 'road' && tile.type !== 'expressway_pillar' && tile.type !== 'plantation' && tile.hasRoadAccess === false) {
          return '#f97316'; // ORANGE: No Road Access
     }
 
     // 3. Functional: Return normal color (or slightly dimmed)
-    if (requiresPower || tile.type === 'road' || tile.type === 'expressway_pillar' || config.population) {
+    if (requiresPower || tile.type === 'road' || tile.type === 'expressway_pillar' || config.population || tile.type === 'plantation') {
         return defaultColor; 
     }
     
@@ -292,6 +301,120 @@ export const InstancedBuildings: React.FC = () => {
           />
         ))}
       </Instances>
+
+      {/* --- FACTORIES --- */}
+      <Instances range={500} geometry={boxGeo} material={whiteMat}>
+         {factories.map((t) => (
+             <Instance 
+                key={`fact-body-${t.x}-${t.z}`}
+                position={[t.x * TILE_SIZE + TILE_SIZE / 2, 2, t.z * TILE_SIZE + TILE_SIZE / 2]}
+                scale={[3.5, 4, 3.5]}
+                color={getColor("#475569", t)} // Slate 600
+             />
+         ))}
+      </Instances>
+      <Instances range={1000} geometry={cylinderGeo} material={whiteMat}>
+         {factories.map((t) => (
+             <React.Fragment key={`fact-stacks-${t.x}-${t.z}`}>
+                <Instance 
+                    position={[t.x * TILE_SIZE + TILE_SIZE / 2 - 1, 5, t.z * TILE_SIZE + TILE_SIZE / 2 - 1]}
+                    scale={[0.4, 3, 0.4]}
+                    color={getColor("#1e293b", t)} // Dark Slate
+                />
+                 <Instance 
+                    position={[t.x * TILE_SIZE + TILE_SIZE / 2 + 0.5, 4.5, t.z * TILE_SIZE + TILE_SIZE / 2 + 0.5]}
+                    scale={[0.4, 2, 0.4]}
+                    color={getColor("#1e293b", t)} 
+                />
+             </React.Fragment>
+         ))}
+      </Instances>
+
+      {/* --- PLANTATIONS (COFFEE FARM) --- */}
+      <Instances range={500} geometry={boxGeo} material={whiteMat}>
+        {plantations.map((t) => (
+          <Instance
+            key={`plant-ground-${t.x}-${t.z}`}
+            position={[t.x * TILE_SIZE + TILE_SIZE / 2, 0.1, t.z * TILE_SIZE + TILE_SIZE / 2]}
+            scale={[3.8, 0.2, 3.8]}
+            color={getColor("#57534e", t)} // Stone Gray (Dirt)
+          />
+        ))}
+      </Instances>
+      <Instances range={2000} geometry={coneGeo} material={whiteMat}>
+        {plantations.map((t) => {
+           // Create 4 bushes per tile
+           const offsets = [[-1, -1], [1, 1], [-1, 1], [1, -1]];
+           return (
+             <React.Fragment key={`plant-bushes-${t.x}-${t.z}`}>
+                {offsets.map((off, i) => (
+                    <Instance 
+                        key={i}
+                        position={[t.x * TILE_SIZE + TILE_SIZE/2 + off[0], 0.8, t.z * TILE_SIZE + TILE_SIZE/2 + off[1]]}
+                        scale={[1.2, 1.2, 1.2]}
+                        color={getColor("#15803d", t)} // Green
+                    />
+                ))}
+             </React.Fragment>
+           );
+        })}
+      </Instances>
+
+      {/* --- MALLS --- */}
+      <Instances range={200} geometry={boxGeo} material={whiteMat}>
+        {malls.map((t) => (
+          <Instance
+            key={`mall-body-${t.x}-${t.z}`}
+            position={[t.x * TILE_SIZE + TILE_SIZE / 2, 2.5, t.z * TILE_SIZE + TILE_SIZE / 2]}
+            scale={[7, 5, 7]} // Big box, assumed placed on center of 2x2 but instanced rendering might need adjustment if using single tile reference. 
+                              // Since mall is 2x2, the tile 't' is the top-left anchor. We need to shift center.
+                              // Correction: TILE_SIZE is 4. 2 tiles is 8 units. 
+                              // If t is at x,z, we render at x+0.5, z+0.5 relative to tile grid? 
+                              // Current 't' is the anchor. Center of 2x2 block is (x+0.5)*TILE_SIZE? No.
+                              // Let's just center it on the anchor tile for simplicity or shift it slightly.
+                              // If width=2, depth=2, the occupied space is (x,z) to (x+1,z+1).
+                              // Center is x+0.5, z+0.5 in grid coords.
+            position-x={(t.x + 0.5) * TILE_SIZE}
+            position-z={(t.z + 0.5) * TILE_SIZE}
+            color={getColor("#fca5a5", t)} // Pink/Salmon
+          />
+        ))}
+      </Instances>
+      <Instances range={200} geometry={boxGeo} material={whiteMat}>
+         {malls.map((t) => (
+            <Instance 
+               key={`mall-roof-${t.x}-${t.z}`}
+               position-x={(t.x + 0.5) * TILE_SIZE}
+               position-y={5.1}
+               position-z={(t.z + 0.5) * TILE_SIZE}
+               scale={[6, 0.2, 6]}
+               color={getColor("#be123c", t)} // Dark Red
+            />
+         ))}
+      </Instances>
+
+      {/* --- OFFICES --- */}
+      <Instances range={500} geometry={boxGeo} material={whiteMat}>
+        {offices.map((t) => (
+          <Instance
+            key={`office-glass-${t.x}-${t.z}`}
+            position={[t.x * TILE_SIZE + TILE_SIZE / 2, 6, t.z * TILE_SIZE + TILE_SIZE / 2]}
+            scale={[3, 12, 3]}
+            color={getColor("#3b82f6", t)} // Blue glass
+          />
+        ))}
+      </Instances>
+       <Instances range={500} geometry={boxGeo} material={whiteMat}>
+        {offices.map((t) => (
+          <Instance
+            key={`office-frame-${t.x}-${t.z}`}
+            position={[t.x * TILE_SIZE + TILE_SIZE / 2, 6, t.z * TILE_SIZE + TILE_SIZE / 2]}
+            scale={[3.1, 12, 0.5]} // Decorative frame
+            color={getColor("#1e293b", t)} // Dark frame
+          />
+        ))}
+      </Instances>
+
 
     </group>
   );

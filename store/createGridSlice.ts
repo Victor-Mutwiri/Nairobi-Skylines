@@ -121,10 +121,13 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
 
   runGameTick: () => {
     const state = get();
+    const taxRate = state.taxRate || 1.0;
     
     // Financial Tracking
     let incomeResidential = 0;
     let incomeCommercial = 0;
+    let incomeIndustrial = 0;
+    let incomeAgricultural = 0;
     let incomeTolls = 0;
     let expenseInfra = 0;
     let expenseServices = 0;
@@ -150,7 +153,7 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
     
     Object.values(state.tiles).forEach((t: TileData) => {
         const key = `${t.x},${t.z}`;
-        if (t.type === 'road') roadKeys.add(key);
+        if (t.type === 'road' || t.type === 'expressway_pillar') roadKeys.add(key);
         if (t.type === 'power_plant') powerSourceKeys.push(key);
     });
 
@@ -227,7 +230,7 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
             for(const nKey of neighbors) {
                 const nTile = state.tiles[nKey];
                 if (nTile) {
-                    if (nTile.type === 'road') {
+                    if (nTile.type === 'road' || nTile.type === 'expressway_pillar') {
                         hasRoadAccess = true;
                         if (poweredNetwork.has(nKey)) {
                             hasPowerAccess = true;
@@ -242,7 +245,7 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
       }
 
       // Self-check for Infrastructure
-      if (tile.type === 'road') {
+      if (tile.type === 'road' || tile.type === 'expressway_pillar') {
          hasRoadAccess = true;
          hasPowerAccess = poweredNetwork.has(`${tile.x},${tile.z}`);
       }
@@ -268,19 +271,34 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
       }
 
       const requiresPower = !!config.powerConsumption;
-      const needsRoad = tile.type !== 'acacia' && tile.type !== 'informal_settlement' && tile.type !== 'road'; 
+      const needsRoad = tile.type !== 'acacia' && tile.type !== 'plantation' && tile.type !== 'informal_settlement' && tile.type !== 'road'; 
       
       const effectiveRoadAccess = needsRoad ? hasRoadAccess : true;
 
       // A building functions (Generates Revenue) if:
       const isFunctioning = effectiveRoadAccess && (!requiresPower || (requiresPower && isPowerCapacitySufficient && hasPowerAccess));
 
-      // Financial Calculation
+      // Financial Calculation (APPLY TAX RATE HERE)
       if (config.revenue) {
           if (isFunctioning) {
-             if (tile.type === 'runda_house' || tile.type === 'apartment') incomeResidential += config.revenue;
-             else if (tile.type === 'expressway_pillar') incomeTolls += config.revenue;
-             else incomeCommercial += config.revenue;
+             const baseRev = config.revenue;
+             
+             if (tile.type === 'runda_house' || tile.type === 'apartment') {
+                 incomeResidential += (baseRev * taxRate);
+             }
+             else if (tile.type === 'factory') {
+                 incomeIndustrial += (baseRev * taxRate);
+             }
+             else if (tile.type === 'plantation') {
+                 incomeAgricultural += (baseRev * taxRate); // Agricultural subsidies? Let's tax them normally for now.
+             }
+             else if (tile.type === 'expressway_pillar') {
+                 incomeTolls += baseRev; // Tolls are flat fee, not taxed by rate usually
+             }
+             else {
+                 // Commercial (Offices, Kiosks, Malls, Bars)
+                 incomeCommercial += (baseRev * taxRate);
+             }
           }
       }
       
@@ -326,6 +344,14 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
          if (nearHouse) happinessPenalty += 1;
       }
     });
+
+    // --- TAX HAPPINESS IMPACT ---
+    // Low tax (0.5) = +5 Happiness
+    // High tax (1.5) = -10 Happiness
+    // Extortion (2.0) = -25 Happiness
+    if (taxRate <= 0.8) calcHappiness += 5;
+    if (taxRate >= 1.2) happinessPenalty += 10;
+    if (taxRate >= 1.8) happinessPenalty += 15;
 
     // --- TRAFFIC SIMULATION LOGIC ---
     const roadCount = roadKeys.size;
@@ -409,7 +435,7 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
     if (!isPowerCapacitySufficient && calcPowerDemand > 0) calcHappiness -= 20; 
     calcHappiness = Math.max(0, Math.min(100, calcHappiness));
 
-    const totalIncome = incomeResidential + incomeCommercial + incomeTolls + state.kickbackRevenue;
+    const totalIncome = incomeResidential + incomeCommercial + incomeIndustrial + incomeAgricultural + incomeTolls + state.kickbackRevenue;
     const totalExpenses = expenseInfra + expenseServices + emergencyCost;
     const netIncome = totalIncome - totalExpenses;
     
@@ -473,6 +499,8 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
             income: {
                 residential: incomeResidential,
                 commercial: incomeCommercial,
+                industrial: incomeIndustrial,
+                agricultural: incomeAgricultural,
                 tolls: incomeTolls,
                 kickbacks: state.kickbackRevenue,
                 total: totalIncome
@@ -503,7 +531,8 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
       tickCount: state.tickCount,
       kickbackRevenue: state.kickbackRevenue,
       fires: state.fires,
-      gameWon: state.gameWon
+      gameWon: state.gameWon,
+      taxRate: state.taxRate
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(dataToSave));

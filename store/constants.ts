@@ -30,7 +30,7 @@ export const BUILDING_COSTS: Record<BuildingType, {
   'kiosk': { 
     cost: 2000, 
     label: 'Kiosk',
-    revenue: 25,
+    revenue: 30,
     pollution: 0.2,
     description: 'Small business. Adds +1 Corruption.'
   },
@@ -38,10 +38,42 @@ export const BUILDING_COSTS: Record<BuildingType, {
     cost: 20000, 
     label: 'Apartment', 
     population: 50,
-    revenue: 200,
+    revenue: 250,
     powerConsumption: 5,
     pollution: 1,
     description: 'High density. Needs 5 Power.'
+  },
+  'plantation': {
+    cost: 3000,
+    label: 'Coffee Farm',
+    revenue: 40,
+    pollution: -1, // Cleans air slightly
+    description: 'Agricultural income. Eco-friendly.'
+  },
+  'factory': {
+    cost: 15000,
+    label: 'Factory',
+    revenue: 400,
+    powerConsumption: 10,
+    pollution: 10,
+    description: 'High revenue industrial zone. Heavy pollution.'
+  },
+  'office': {
+    cost: 35000,
+    label: 'Office Block',
+    revenue: 800,
+    powerConsumption: 15,
+    description: 'Corporate offices. High power usage.'
+  },
+  'mall': {
+    cost: 50000,
+    label: 'Shopping Mall',
+    revenue: 1200,
+    powerConsumption: 25,
+    happiness: 5,
+    description: 'Commercial hub. Boosts happiness & revenue.',
+    width: 2,
+    depth: 2
   },
   'acacia': { 
     cost: 1000, 
@@ -104,7 +136,7 @@ export const BUILDING_COSTS: Record<BuildingType, {
   'bar': {
     cost: 5000,
     label: 'Club/Bar',
-    revenue: 100, 
+    revenue: 120, 
     pollution: 0.5, 
     description: 'High income. Noise reduces happiness.'
   },
