@@ -5,7 +5,7 @@ import { OrbitControls, PerspectiveCamera, Sky, Stars } from '@react-three/drei'
 import * as THREE from 'three';
 import { GridSystem, TILE_SIZE } from './GridSystem';
 import { useCityStore, TileData } from '../store/useCityStore';
-import { BuildingRenderer } from './BuildingRenderer';
+import { BuildingRenderer, AdjacencyInfo } from './BuildingRenderer';
 
 // Fix for React 18 / TypeScript: Augment React.JSX.IntrinsicElements
 declare module 'react' {
@@ -47,6 +47,17 @@ declare global {
 
 const GameCanvas: React.FC = () => {
   const tiles = useCityStore((state) => state.tiles);
+
+  // Helper to calculate road adjacencies efficiently during render
+  const getRoadAdjacency = (x: number, z: number): AdjacencyInfo => {
+    const isRoad = (tx: number, tz: number) => tiles[`${tx},${tz}`]?.type === 'road';
+    return {
+      north: isRoad(x, z - 1),
+      south: isRoad(x, z + 1),
+      east: isRoad(x + 1, z),
+      west: isRoad(x - 1, z),
+    };
+  };
 
   return (
     <div className="w-full h-full bg-[#87CEEB]">
@@ -109,18 +120,23 @@ const GameCanvas: React.FC = () => {
         </mesh>
 
         {/* Placed Buildings */}
-        {Object.values(tiles).map((tile: TileData) => (
-          <BuildingRenderer 
-            key={`${tile.x},${tile.z}`}
-            type={tile.type}
-            position={[
-              tile.x * TILE_SIZE + TILE_SIZE / 2, 
-              0, 
-              tile.z * TILE_SIZE + TILE_SIZE / 2
-            ]}
-            rotation={tile.rotation}
-          />
-        ))}
+        {Object.values(tiles).map((tile: TileData) => {
+          const adjacencies = tile.type === 'road' ? getRoadAdjacency(tile.x, tile.z) : undefined;
+          
+          return (
+            <BuildingRenderer 
+              key={`${tile.x},${tile.z}`}
+              type={tile.type}
+              position={[
+                tile.x * TILE_SIZE + TILE_SIZE / 2, 
+                0, 
+                tile.z * TILE_SIZE + TILE_SIZE / 2
+              ]}
+              rotation={tile.rotation}
+              adjacencies={adjacencies}
+            />
+          );
+        })}
 
         {/* Interactive Grid System */}
         <GridSystem />

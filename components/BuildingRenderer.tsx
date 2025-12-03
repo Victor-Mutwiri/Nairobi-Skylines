@@ -18,13 +18,26 @@ declare module 'react' {
   }
 }
 
+export interface AdjacencyInfo {
+  north: boolean;
+  south: boolean;
+  east: boolean;
+  west: boolean;
+}
+
 interface BuildingRendererProps {
   type: BuildingType;
   position?: [number, number, number];
   rotation?: number; // 0, 1, 2, 3 (multipliers of 90 degrees)
+  adjacencies?: AdjacencyInfo;
 }
 
-export const BuildingRenderer: React.FC<BuildingRendererProps> = ({ type, position = [0, 0, 0], rotation = 0 }) => {
+export const BuildingRenderer: React.FC<BuildingRendererProps> = ({ 
+  type, 
+  position = [0, 0, 0], 
+  rotation = 0,
+  adjacencies = { north: false, south: false, east: false, west: false }
+}) => {
   const rotationY = rotation * (Math.PI / 2);
 
   switch (type) {
@@ -123,18 +136,67 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = ({ type, positi
       );
       
     case 'road':
+      const { north, south, east, west } = adjacencies;
+      const hasConnection = north || south || east || west;
+      
       return (
-        <group position={position} rotation={[0, rotationY, 0]}>
-            {/* Asphalt */}
+        <group position={position}>
+            {/* Base Asphalt */}
             <mesh position={[0, 0.05, 0]} receiveShadow>
                 <boxGeometry args={[4, 0.1, 4]} />
                 <meshStandardMaterial color="#334155" />
             </mesh>
-            {/* Lane Markings */}
-            <mesh position={[0, 0.11, 0]} rotation={[-Math.PI/2, 0, 0]}>
-                <planeGeometry args={[0.2, 2]} />
-                <meshStandardMaterial color="#fcd116" />
-            </mesh>
+            
+            {/* Lane Markings - Only if connected, or render a simple dot/line if isolated? 
+                Let's render lines towards connections. */}
+            
+            {/* Center Hub (Intersection point) */}
+            {hasConnection && (
+              <mesh position={[0, 0.12, 0]} rotation={[-Math.PI/2, 0, 0]}>
+                  <planeGeometry args={[0.6, 0.6]} />
+                  <meshStandardMaterial color="#fcd116" />
+              </mesh>
+            )}
+
+            {/* North Line */}
+            {north && (
+               <mesh position={[0, 0.11, -1]} rotation={[-Math.PI/2, 0, 0]}>
+                  <planeGeometry args={[0.2, 2]} />
+                  <meshStandardMaterial color="#fcd116" />
+               </mesh>
+            )}
+
+            {/* South Line */}
+            {south && (
+               <mesh position={[0, 0.11, 1]} rotation={[-Math.PI/2, 0, 0]}>
+                  <planeGeometry args={[0.2, 2]} />
+                  <meshStandardMaterial color="#fcd116" />
+               </mesh>
+            )}
+
+            {/* East Line */}
+            {east && (
+               <mesh position={[1, 0.11, 0]} rotation={[-Math.PI/2, 0, 0]}>
+                  <planeGeometry args={[2, 0.2]} />
+                  <meshStandardMaterial color="#fcd116" />
+               </mesh>
+            )}
+
+            {/* West Line */}
+            {west && (
+               <mesh position={[-1, 0.11, 0]} rotation={[-Math.PI/2, 0, 0]}>
+                  <planeGeometry args={[2, 0.2]} />
+                  <meshStandardMaterial color="#fcd116" />
+               </mesh>
+            )}
+
+            {/* If no connections, maybe just a default vertical line? */}
+            {!hasConnection && (
+               <mesh position={[0, 0.11, 0]} rotation={[-Math.PI/2, 0, 0]}>
+                  <planeGeometry args={[0.2, 2]} />
+                  <meshStandardMaterial color="#fcd116" opacity={0.5} transparent />
+               </mesh>
+            )}
         </group>
       );
 
