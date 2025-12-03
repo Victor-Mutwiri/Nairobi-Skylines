@@ -1,5 +1,4 @@
 
-
 import { create } from 'zustand';
 
 // Define the types of buildings available
@@ -209,6 +208,9 @@ interface CityState {
   powerDemand: number;
   isPowerOverlay: boolean;
 
+  // Traffic System
+  trafficDensity: number; // 0.0 to >1.0 (Saturation)
+
   // Time System
   isNight: boolean;
 
@@ -248,6 +250,7 @@ const DEFAULT_STATE = {
   pollution: 0,
   powerCapacity: 0,
   powerDemand: 0,
+  trafficDensity: 0,
   isPowerOverlay: false,
   isNight: false,
   tiles: {},
@@ -614,6 +617,21 @@ export const useCityStore = create<CityState>((set, get) => ({
       }
     });
 
+    // --- TRAFFIC SIMULATION LOGIC ---
+    // Count road tiles (capacity) vs Population (demand)
+    const roadCount = roadKeys.size;
+    // Assume 1 road tile handles 15 citizens efficiently
+    const trafficCapacity = Math.max(1, roadCount * 15); 
+    const trafficDensity = calcPopulation / trafficCapacity;
+    
+    let trafficPenalty = 0;
+    if (trafficDensity > 1.0) {
+        // Penalty grows with excess density
+        trafficPenalty = Math.floor((trafficDensity - 1.0) * 20); 
+        trafficPenalty = Math.min(30, trafficPenalty); // Cap penalty
+    }
+    happinessPenalty += trafficPenalty;
+
     // --- FIRE LOGIC ---
     let newFires = { ...state.fires };
     let emergencyCost = 0;
@@ -741,6 +759,7 @@ export const useCityStore = create<CityState>((set, get) => ({
         pollution: calcPollution,
         powerCapacity: calcPowerCapacity,
         powerDemand: calcPowerDemand,
+        trafficDensity: trafficDensity,
         tickCount: newTickCount,
         activeEvent: newEvent,
         fires: newFires,

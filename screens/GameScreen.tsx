@@ -1,8 +1,7 @@
 
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle, Zap, Trash2, Hammer } from 'lucide-react';
+import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle, Zap, Trash2, Hammer, Car } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
 import TenderModal from '../components/TenderModal';
@@ -23,6 +22,7 @@ const GameScreen: React.FC = () => {
   const insecurity = useCityStore((state) => state.insecurity);
   const corruption = useCityStore((state) => state.corruption);
   const pollution = useCityStore((state) => state.pollution);
+  const trafficDensity = useCityStore((state) => state.trafficDensity);
   const powerCapacity = useCityStore((state) => state.powerCapacity);
   const powerDemand = useCityStore((state) => state.powerDemand);
   const isPowerOverlay = useCityStore((state) => state.isPowerOverlay);
@@ -178,6 +178,19 @@ const GameScreen: React.FC = () => {
                 <div className="flex flex-col">
                   <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Happy</span>
                   <span className="font-display font-bold text-lg md:text-xl">{happiness}%</span>
+                </div>
+              </div>
+
+               <div className="w-px bg-slate-700 my-1"></div>
+
+              {/* Traffic */}
+              <div className="flex items-center gap-2 md:gap-3 min-w-fit">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${trafficDensity > 1.0 ? 'bg-red-500/20 text-red-500' : 'bg-slate-700/50 text-slate-400'}`}>
+                    <Car className="w-4 h-4 md:w-5 md:h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] md:text-xs text-slate-400 uppercase tracking-wider font-bold">Traffic</span>
+                  <span className="font-display font-bold text-lg md:text-xl">{Math.round(trafficDensity * 100)}%</span>
                 </div>
               </div>
 

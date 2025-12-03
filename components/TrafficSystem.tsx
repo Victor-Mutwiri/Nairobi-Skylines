@@ -55,16 +55,27 @@ const MatatuAgent: React.FC<AgentProps> = ({ startX, startZ }) => {
     targetZ: startZ,
     progress: 0,
     isMoving: false,
+    targetRotation: new THREE.Quaternion(),
   });
+
+  // Initialize Position
+  useEffect(() => {
+     if(groupRef.current) {
+        groupRef.current.position.set(startX * TILE_SIZE + TILE_SIZE/2, 0, startZ * TILE_SIZE + TILE_SIZE/2);
+     }
+  }, [startX, startZ]);
 
   useFrame((_state3d, delta) => {
     if (!groupRef.current) return;
     
     const s = state.current;
     
+    // Smooth Rotation constantly
+    groupRef.current.quaternion.slerp(s.targetRotation, delta * 5);
+
     // Movement Logic
     if (s.isMoving) {
-      s.progress += (MATATU_SPEED * delta) / TILE_SIZE; // Normalize speed by tile size
+      s.progress += (MATATU_SPEED * delta) / TILE_SIZE; 
       
       if (s.progress >= 1) {
         // Arrived
@@ -73,20 +84,18 @@ const MatatuAgent: React.FC<AgentProps> = ({ startX, startZ }) => {
         s.progress = 0;
         s.isMoving = false;
       } else {
-        // Interpolate
-        const x = THREE.MathUtils.lerp(s.currentX * TILE_SIZE + TILE_SIZE/2, s.targetX * TILE_SIZE + TILE_SIZE/2, s.progress);
-        const z = THREE.MathUtils.lerp(s.currentZ * TILE_SIZE + TILE_SIZE/2, s.targetZ * TILE_SIZE + TILE_SIZE/2, s.progress);
-        groupRef.current.position.set(x, 0, z);
+        // Interpolate Position
+        const startPos = new THREE.Vector3(s.currentX * TILE_SIZE + TILE_SIZE/2, 0, s.currentZ * TILE_SIZE + TILE_SIZE/2);
+        const endPos = new THREE.Vector3(s.targetX * TILE_SIZE + TILE_SIZE/2, 0, s.targetZ * TILE_SIZE + TILE_SIZE/2);
+        
+        groupRef.current.position.lerpVectors(startPos, endPos, s.progress);
       }
     } else {
-      // Decide next move
-      // Explicitly cast tiles to Record<string, TileData> to avoid 'unknown' type errors
+      // AI Decision Logic
       const tiles = useCityStore.getState().tiles as Record<string, TileData>;
       
-      // Check if current tile is still a road
-      const currentKey = `${s.currentX},${s.currentZ}`;
-      if (tiles[currentKey]?.type !== 'road') {
-         // Road deleted? Shrink and hide
+      // Check if road still exists
+      if (tiles[`${s.currentX},${s.currentZ}`]?.type !== 'road') {
          groupRef.current.scale.setScalar(Math.max(0, groupRef.current.scale.x - delta * 5));
          return;
       } else {
@@ -101,70 +110,69 @@ const MatatuAgent: React.FC<AgentProps> = ({ startX, startZ }) => {
         { x: s.currentX, z: s.currentZ - 1 },
       ].filter(n => tiles[`${n.x},${n.z}`]?.type === 'road');
 
+      // Filter out backtracking if possible (unless dead end)
+      // Note: This needs history tracking to be perfect, but simple heuristic: don't go back to targetX/targetZ 
+      // is not applicable here because targetX IS currentX now.
+      
       if (neighbors.length > 0) {
-        // Pick random neighbor
-        // Simple heuristic: try to avoid going backwards immediately if other options exist
         const next = neighbors[Math.floor(Math.random() * neighbors.length)];
         
         s.targetX = next.x;
         s.targetZ = next.z;
         s.isMoving = true;
 
-        // Rotation - Look at target
-        groupRef.current.lookAt(
-            next.x * TILE_SIZE + TILE_SIZE/2, 
-            0, 
-            next.z * TILE_SIZE + TILE_SIZE/2
-        );
+        // Calculate Target Rotation
+        const currentWorldPos = new THREE.Vector3(s.currentX * TILE_SIZE + TILE_SIZE/2, 0, s.currentZ * TILE_SIZE + TILE_SIZE/2);
+        const nextWorldPos = new THREE.Vector3(next.x * TILE_SIZE + TILE_SIZE/2, 0, next.z * TILE_SIZE + TILE_SIZE/2);
+        
+        const dummyMatrix = new THREE.Matrix4();
+        dummyMatrix.lookAt(currentWorldPos, nextWorldPos, new THREE.Vector3(0, 1, 0));
+        s.targetRotation.setFromRotationMatrix(dummyMatrix);
       }
     }
   });
-
-  // Initial Position
-  useEffect(() => {
-     if(groupRef.current) {
-        groupRef.current.position.set(startX * TILE_SIZE + TILE_SIZE/2, 0, startZ * TILE_SIZE + TILE_SIZE/2);
-     }
-  }, [startX, startZ]);
 
   return <MatatuMesh ref={groupRef} />;
 };
 
 export const TrafficSystem: React.FC = () => {
-  // Explicitly cast tiles to Record<string, TileData> to fix inference issues
   const tiles = useCityStore((state) => state.tiles) as Record<string, TileData>;
   
-  // We only track the IDs of agents to spawn. 
-  // The agents themselves handle their state (position) via refs to avoid React re-renders.
-  const [agents, setAgents] = useState<{id: number, x: number, z: number}[]>([]);
+  // Agents are managed by state to ensure React diffing works, but their positions are refs.
+  const [agents, setAgents] = useState<{id: string, x: number, z: number}[]>([]);
 
-  // Memoize road tiles list for dependency checking
   const roadTiles = useMemo(() => {
     return Object.values(tiles).filter(t => t.type === 'road');
   }, [tiles]);
 
   useEffect(() => {
-    // Requirements: At least 10 road tiles, spawn 5 agents.
-    if (roadTiles.length >= 10 && agents.length < 5) {
-      const needed = 5 - agents.length;
-      const newAgents = [];
-      for (let i = 0; i < needed; i++) {
-        const randomRoad = roadTiles[Math.floor(Math.random() * roadTiles.length)];
-        newAgents.push({
-            id: Math.random(),
-            x: randomRoad.x,
-            z: randomRoad.z
-        });
-      }
-      setAgents(prev => [...prev, ...newAgents]);
-    }
+    // Dynamic Traffic Density:
+    // Spawn 1 car for every 4 road tiles, capped at 50 to save FPS
+    const targetCount = Math.min(50, Math.floor(roadTiles.length / 4));
     
-    // If roads drop below 10, remove agents to reset
-    if (roadTiles.length < 10 && agents.length > 0) {
-        setAgents([]);
+    if (agents.length < targetCount) {
+        // Spawn more
+        const needed = targetCount - agents.length;
+        const newAgents = [];
+        for (let i = 0; i < needed; i++) {
+             const randomRoad = roadTiles[Math.floor(Math.random() * roadTiles.length)];
+             if (randomRoad) {
+                newAgents.push({
+                    id: `${Date.now()}-${Math.random()}`,
+                    x: randomRoad.x,
+                    z: randomRoad.z
+                });
+             }
+        }
+        if (newAgents.length > 0) {
+             setAgents(prev => [...prev, ...newAgents]);
+        }
+    } else if (agents.length > targetCount + 5) {
+        // Despawn if way too many (e.g. roads deleted)
+        setAgents(prev => prev.slice(0, targetCount));
     }
 
-  }, [roadTiles.length, agents.length]); // Check only when counts change to avoid spamming
+  }, [roadTiles.length, agents.length]); 
 
   return (
     <group>
