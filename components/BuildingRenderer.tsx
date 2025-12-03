@@ -43,15 +43,15 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
 }) => {
   const rotationY = rotation * (Math.PI / 2);
 
-  const getMatColor = (color: string, isPowerPlant: boolean = false) => {
+  const getMatColor = (color: string, isUtility: boolean = false) => {
       if (!isOverlay) return color;
-      if (isPowerPlant) return color; // Keep power plants colored
+      if (isUtility) return color; // Keep utilities colored in overlay for visibility
       return "#64748b"; // Grayscale/Slate for others
   };
 
-  const getEmissive = (color: string, intensity: number, isPowerPlant: boolean = false) => {
+  const getEmissive = (color: string, intensity: number, isUtility: boolean = false) => {
       if (!isOverlay) return { emissive: color, emissiveIntensity: intensity };
-      if (isPowerPlant) return { emissive: color, emissiveIntensity: intensity };
+      if (isUtility) return { emissive: color, emissiveIntensity: intensity };
       return { emissive: "#000000", emissiveIntensity: 0 };
   };
   
@@ -261,6 +261,43 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
                  <cylinderGeometry args={[0.2, 0.2, 3]} />
                  <meshStandardMaterial color={getMatColor("#fbbf24", true)} />
              </mesh>
+          </group>
+        );
+
+      case 'dumpsite':
+        return (
+          <group position={position} rotation={[0, rotationY, 0]}>
+            {/* Ground (Dirt/Mud) */}
+            <mesh position={[0, 0.1, 0]} receiveShadow>
+               <boxGeometry args={[3.8, 0.2, 3.8]} />
+               <meshStandardMaterial color={getMatColor("#57534e", true)} />
+            </mesh>
+            {/* Trash Pile 1 */}
+            <mesh position={[-0.5, 0.8, -0.5]} castShadow>
+               <coneGeometry args={[1.5, 1.5, 6]} />
+               <meshStandardMaterial color={getMatColor("#44403c", true)} flatShading />
+            </mesh>
+            {/* Trash Pile 2 */}
+            <mesh position={[1, 0.6, 1]} castShadow>
+               <coneGeometry args={[1, 1.2, 5]} />
+               <meshStandardMaterial color={getMatColor("#78716c", true)} flatShading />
+            </mesh>
+            {/* Debris Bits */}
+            <mesh position={[0, 0.3, 1.5]}>
+               <boxGeometry args={[0.5, 0.5, 0.5]} />
+               <meshStandardMaterial color={getMatColor("#3b82f6", true)} />
+            </mesh>
+            <mesh position={[1.2, 0.3, -1]}>
+               <boxGeometry args={[0.4, 0.4, 0.4]} />
+               <meshStandardMaterial color={getMatColor("#ef4444", true)} />
+            </mesh>
+            {/* Fence Posts */}
+            {[[-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8], [1.8, 1.8]].map((pos, i) => (
+                <mesh key={i} position={[pos[0], 0.5, pos[1]]}>
+                    <boxGeometry args={[0.2, 1, 0.2]} />
+                    <meshStandardMaterial color={getMatColor("#713f12", true)} />
+                </mesh>
+            ))}
           </group>
         );
 

@@ -14,7 +14,8 @@ export type BuildingType =
   | 'uhuru_park'
   | 'police_station'
   | 'bar'
-  | 'power_plant';
+  | 'power_plant'
+  | 'dumpsite';
 
 export type EventType = 'tender_expressway' | null;
 
@@ -26,6 +27,7 @@ export const BUILDING_COSTS: Record<BuildingType, {
   happiness?: number; // Base happiness bonus
   revenue?: number; // Income generated per tick (Tax)
   upkeep?: number; // Cost per tick (Maintenance)
+  pollution?: number; // Positive = pollutes, Negative = cleans
   powerConsumption?: number; // Power required
   powerProduction?: number; // Power generated
   description: string;
@@ -36,12 +38,14 @@ export const BUILDING_COSTS: Record<BuildingType, {
     population: 5,
     revenue: 50,
     powerConsumption: 1,
+    pollution: 0.1,
     description: 'Low density housing. Needs 1 Power.'
   },
   'kiosk': { 
     cost: 2000, 
     label: 'Kiosk',
     revenue: 25,
+    pollution: 0.2,
     description: 'Small business. Adds +1 Corruption.'
   },
   'apartment': { 
@@ -50,6 +54,7 @@ export const BUILDING_COSTS: Record<BuildingType, {
     population: 50,
     revenue: 200,
     powerConsumption: 5,
+    pollution: 1,
     description: 'High density. Needs 5 Power.'
   },
   'acacia': { 
@@ -57,7 +62,8 @@ export const BUILDING_COSTS: Record<BuildingType, {
     label: 'Acacia Tree', 
     happiness: 2,
     upkeep: 0,
-    description: 'Native vegetation. Improves aesthetics.'
+    pollution: -0.5,
+    description: 'Native vegetation. Cleans air.'
   },
   'road': { 
     cost: 500, 
@@ -79,6 +85,7 @@ export const BUILDING_COSTS: Record<BuildingType, {
     label: 'Times Tower', 
     population: 150,
     revenue: 1000, 
+    powerConsumption: 20,
     description: 'Corporate headquarters. Huge tax generator.'
   },
   'jamia_mosque': { 
@@ -93,7 +100,8 @@ export const BUILDING_COSTS: Record<BuildingType, {
     label: 'Uhuru Park', 
     happiness: 20,
     upkeep: 200,
-    description: 'The green lung of the city. Costs upkeep.'
+    pollution: -2,
+    description: 'The green lung of the city.'
   },
   'police_station': {
     cost: 15000,
@@ -105,6 +113,7 @@ export const BUILDING_COSTS: Record<BuildingType, {
     cost: 5000,
     label: 'Club/Bar',
     revenue: 100, // High income
+    pollution: 0.5, // Noise pollution effectively
     description: 'High income. Noise reduces happiness.'
   },
   'power_plant': {
@@ -112,7 +121,15 @@ export const BUILDING_COSTS: Record<BuildingType, {
     label: 'Geothermal Plant',
     upkeep: 400,
     powerProduction: 50,
-    description: 'Generates 50 Power. High Upkeep.'
+    pollution: 5,
+    description: 'Generates 50 Power. Pollutes.'
+  },
+  'dumpsite': {
+    cost: 8000,
+    label: 'Dandora Dump',
+    upkeep: 200,
+    pollution: -15, // Large reduction (simulating waste management)
+    description: 'Manages waste. Reduces overall pollution.'
   }
 };
 
@@ -131,6 +148,7 @@ interface CityState {
   happiness: number;
   insecurity: number;
   corruption: number;
+  pollution: number;
   
   // Power System
   powerCapacity: number;
@@ -164,6 +182,7 @@ const DEFAULT_STATE = {
   happiness: 50,
   insecurity: 0,
   corruption: 0,
+  pollution: 0,
   powerCapacity: 0,
   powerDemand: 0,
   isPowerOverlay: false,
@@ -217,10 +236,6 @@ export const useCityStore = create<CityState>((set, get) => ({
       ...state.tiles,
       [key]: { type, x, z, rotation: 0 }
     };
-
-    // Note: Population and Power stats are recalculated in the Game Tick
-    // to ensure consistency, but we can do a quick optimistic update if needed.
-    // For now, we wait for the tick or just update tiles.
     
     return {
       money: state.money - buildingConfig.cost,
@@ -265,6 +280,7 @@ export const useCityStore = create<CityState>((set, get) => ({
     let calcCorruption = 0;
     let calcHappiness = 50; // Start with base happiness
     let calcPopulation = 0;
+    let calcPollution = 0;
     
     let policeCount = 0;
     let happinessPenalty = 0;
@@ -298,6 +314,9 @@ export const useCityStore = create<CityState>((set, get) => ({
       // Happiness
       if (isFunctioning && config.happiness) calcHappiness += config.happiness;
 
+      // Pollution
+      if (isFunctioning && config.pollution) calcPollution += config.pollution;
+
       // Corruption
       if (tile.type === 'kiosk') calcCorruption += 1;
 
@@ -323,6 +342,9 @@ export const useCityStore = create<CityState>((set, get) => ({
       }
     });
 
+    // Ensure pollution doesn't go below 0
+    calcPollution = Math.max(0, calcPollution);
+
     // Finalize Insecurity (Base - Police Mitigation)
     const baseInsecurity = Math.floor(calcPopulation / 10);
     const calcInsecurity = Math.max(0, baseInsecurity - (policeCount * 5));
@@ -331,8 +353,11 @@ export const useCityStore = create<CityState>((set, get) => ({
     const eventCorruption = Math.floor(state.kickbackRevenue / 50); 
     const totalCorruption = calcCorruption + eventCorruption;
 
+    // Pollution Penalty
+    const pollutionPenalty = calcPollution > 50 ? Math.floor((calcPollution - 50) / 2) : 0;
+
     // Finalize Happiness
-    calcHappiness = calcHappiness - totalCorruption - calcInsecurity - happinessPenalty;
+    calcHappiness = calcHappiness - totalCorruption - calcInsecurity - happinessPenalty - pollutionPenalty;
     if (!isPowerSufficient && calcPowerDemand > 0) calcHappiness -= 20; // Blackout penalty
     calcHappiness = Math.max(0, Math.min(100, calcHappiness));
 
@@ -355,6 +380,7 @@ export const useCityStore = create<CityState>((set, get) => ({
         happiness: calcHappiness,
         insecurity: calcInsecurity,
         corruption: totalCorruption,
+        pollution: calcPollution,
         powerCapacity: calcPowerCapacity,
         powerDemand: calcPowerDemand,
         tickCount: newTickCount,
@@ -372,6 +398,7 @@ export const useCityStore = create<CityState>((set, get) => ({
       happiness: state.happiness,
       insecurity: state.insecurity,
       corruption: state.corruption,
+      pollution: state.pollution,
       tiles: state.tiles,
       tickCount: state.tickCount,
       kickbackRevenue: state.kickbackRevenue
