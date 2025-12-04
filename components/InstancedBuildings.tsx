@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Instances, Instance } from '@react-three/drei';
 import * as THREE from 'three';
@@ -24,7 +25,6 @@ export const InstancedBuildings: React.FC = () => {
   const isPowerOverlay = useCityStore((state) => state.isPowerOverlay);
   const powerCapacity = useCityStore((state) => state.powerCapacity);
   const powerDemand = useCityStore((state) => state.powerDemand);
-  // Removed isNight hook
 
   // Group tiles by type for instancing
   const { houses, kiosks, apartments, trees, roads, expressways, plantations, factories, malls, offices } = useMemo(() => {
@@ -118,8 +118,6 @@ export const InstancedBuildings: React.FC = () => {
     }
     
     // 2. Road Check: Needs road + has access
-    // Trees and Plantations don't need roads to function (visually), but logic might penalize them.
-    // Let's assume farms are generally OK or visually don't turn orange.
     if (tile.type !== 'acacia' && tile.type !== 'road' && tile.type !== 'expressway_pillar' && tile.type !== 'plantation' && tile.hasRoadAccess === false) {
          return '#f97316'; // ORANGE: No Road Access
     }
@@ -133,6 +131,11 @@ export const InstancedBuildings: React.FC = () => {
   };
 
   const roadColor = (t: TileData) => getColor("#334155", t);
+
+  // Helper to calculate rotation array [0, Y, 0]
+  const getRot = (t: TileData, extraRad: number = 0): [number, number, number] => {
+      return [0, (t.rotation || 0) * (Math.PI / 2) + extraRad, 0];
+  }
 
   return (
     <group>
@@ -202,37 +205,61 @@ export const InstancedBuildings: React.FC = () => {
       </Instances>
 
 
-      {/* --- RUNDA HOUSES --- */}
+      {/* --- RUNDA HOUSES (Upgraded Visuals) --- */}
+      {/* Body */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
         {houses.map((t) => (
           <Instance
             key={`house-body-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 1, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[2.5, 2, 2.5]}
+            rotation={getRot(t)}
             color={getColor("#f8fafc", t)}
           />
         ))}
       </Instances>
+      {/* Roof */}
       <Instances range={1000} geometry={coneGeo} material={whiteMat}>
         {houses.map((t) => (
           <Instance
             key={`house-roof-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 2.5, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[2.2, 1.5, 2.2]}
-            rotation={[0, Math.PI / 4, 0]}
+            rotation={getRot(t, Math.PI/4)}
             color={getColor("#334155", t)}
           />
         ))}
       </Instances>
-       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
-        {houses.map((t) => (
-          <Instance
-            key={`house-door-${t.x}-${t.z}`}
-            position={[t.x * TILE_SIZE + TILE_SIZE / 2, 0.5, t.z * TILE_SIZE + TILE_SIZE / 2 + 1.3]}
-            scale={[0.6, 1, 0.1]}
-            color={getColor("#475569", t)}
-          />
-        ))}
+      {/* Porch */}
+      <Instances range={1000} geometry={boxGeo} material={whiteMat}>
+        {houses.map((t) => {
+           // Calculate relative position based on rotation
+           // Local position (0, 0.5, 1.3) -> World via simple trig or group rotation simulation
+           const rot = (t.rotation || 0) * (Math.PI / 2);
+           const zOff = Math.cos(rot) * 1.3;
+           const xOff = Math.sin(rot) * 1.3;
+           
+           return (
+            <Instance
+                key={`house-porch-${t.x}-${t.z}`}
+                position={[t.x * TILE_SIZE + TILE_SIZE / 2 + xOff, 0.5, t.z * TILE_SIZE + TILE_SIZE / 2 + zOff]}
+                scale={[1.5, 0.2, 1]}
+                rotation={[0, rot, 0]}
+                color={getColor("#cbd5e1", t)}
+            />
+        )})}
+      </Instances>
+      {/* Chimney */}
+      <Instances range={1000} geometry={boxGeo} material={whiteMat}>
+         {houses.map((t) => (
+            <Instance 
+                key={`house-chim-${t.x}-${t.z}`}
+                position={[t.x * TILE_SIZE + TILE_SIZE / 2, 2.5, t.z * TILE_SIZE + TILE_SIZE / 2]}
+                scale={[0.4, 1, 0.4]}
+                // Offset chimney slightly from center
+                color={getColor("#94a3b8", t)}
+            />
+         ))}
       </Instances>
       
       {/* --- KIOSKS --- */}
@@ -242,19 +269,26 @@ export const InstancedBuildings: React.FC = () => {
             key={`kiosk-body-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 0.75, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[1.5, 1.5, 1.5]}
+            rotation={getRot(t)}
             color={getColor("#16a34a", t)}
           />
         ))}
       </Instances>
+      {/* Awning (Rotated Box) */}
       <Instances range={1000} geometry={boxGeo} material={whiteMat}>
-        {kiosks.map((t) => (
-          <Instance
-            key={`kiosk-stripe-${t.x}-${t.z}`}
-            position={[t.x * TILE_SIZE + TILE_SIZE / 2, 1, t.z * TILE_SIZE + TILE_SIZE / 2]}
-            scale={[1.55, 0.3, 1.55]}
-            color={getColor("#dc2626", t)}
-          />
-        ))}
+        {kiosks.map((t) => {
+           const rot = (t.rotation || 0) * (Math.PI / 2);
+           const zOff = Math.cos(rot) * 0.8;
+           const xOff = Math.sin(rot) * 0.8;
+           return (
+              <Instance
+                key={`kiosk-awn-${t.x}-${t.z}`}
+                position={[t.x * TILE_SIZE + TILE_SIZE / 2 + xOff, 1.5, t.z * TILE_SIZE + TILE_SIZE / 2 + zOff]}
+                scale={[1.6, 0.1, 1]}
+                rotation={[0.4, rot, 0]} // Slanted
+                color={getColor("#dc2626", t)}
+              />
+        )})}
       </Instances>
 
 
@@ -265,6 +299,7 @@ export const InstancedBuildings: React.FC = () => {
             key={`apt-body-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 3, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[2.8, 6, 2.8]}
+            rotation={getRot(t)}
             color={getColor("#fef3c7", t)}
           />
         ))}
@@ -275,9 +310,34 @@ export const InstancedBuildings: React.FC = () => {
             key={`apt-roof-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 6.1, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[3, 0.2, 3]}
+            rotation={getRot(t)}
             color={getColor("#78350f", t)}
           />
         ))}
+      </Instances>
+      {/* Balconies */}
+      <Instances range={2000} geometry={boxGeo} material={whiteMat}>
+        {apartments.map((t) => {
+           const rot = (t.rotation || 0) * (Math.PI / 2);
+           const zOff = Math.cos(rot) * 1.5;
+           const xOff = Math.sin(rot) * 1.5;
+           
+           return (
+            <React.Fragment key={`apt-balc-${t.x}-${t.z}`}>
+                <Instance 
+                     position={[t.x * TILE_SIZE + TILE_SIZE / 2 + xOff, 4, t.z * TILE_SIZE + TILE_SIZE / 2 + zOff]}
+                     scale={[2, 0.2, 0.4]}
+                     rotation={[0, rot, 0]}
+                     color={getColor("#b45309", t)}
+                />
+                <Instance 
+                     position={[t.x * TILE_SIZE + TILE_SIZE / 2 + xOff, 2, t.z * TILE_SIZE + TILE_SIZE / 2 + zOff]}
+                     scale={[2, 0.2, 0.4]}
+                     rotation={[0, rot, 0]}
+                     color={getColor("#b45309", t)}
+                />
+            </React.Fragment>
+        )})}
       </Instances>
       
       {/* --- TREES --- */}
@@ -309,6 +369,7 @@ export const InstancedBuildings: React.FC = () => {
                 key={`fact-body-${t.x}-${t.z}`}
                 position={[t.x * TILE_SIZE + TILE_SIZE / 2, 2, t.z * TILE_SIZE + TILE_SIZE / 2]}
                 scale={[3.5, 4, 3.5]}
+                rotation={getRot(t)}
                 color={getColor("#475569", t)} // Slate 600
              />
          ))}
@@ -365,32 +426,45 @@ export const InstancedBuildings: React.FC = () => {
         {malls.map((t) => (
           <Instance
             key={`mall-body-${t.x}-${t.z}`}
-            position={[t.x * TILE_SIZE + TILE_SIZE / 2, 2.5, t.z * TILE_SIZE + TILE_SIZE / 2]}
-            scale={[7, 5, 7]} // Big box, assumed placed on center of 2x2 but instanced rendering might need adjustment if using single tile reference. 
-                              // Since mall is 2x2, the tile 't' is the top-left anchor. We need to shift center.
-                              // Correction: TILE_SIZE is 4. 2 tiles is 8 units. 
-                              // If t is at x,z, we render at x+0.5, z+0.5 relative to tile grid? 
-                              // Current 't' is the anchor. Center of 2x2 block is (x+0.5)*TILE_SIZE? No.
-                              // Let's just center it on the anchor tile for simplicity or shift it slightly.
-                              // If width=2, depth=2, the occupied space is (x,z) to (x+1,z+1).
-                              // Center is x+0.5, z+0.5 in grid coords.
+            // Centered on anchor tile
             position-x={(t.x + 0.5) * TILE_SIZE}
+            position-y={2.5}
             position-z={(t.z + 0.5) * TILE_SIZE}
+            scale={[7, 5, 7]} 
+            rotation={getRot(t)}
             color={getColor("#fca5a5", t)} // Pink/Salmon
           />
         ))}
       </Instances>
       <Instances range={200} geometry={boxGeo} material={whiteMat}>
-         {malls.map((t) => (
-            <Instance 
-               key={`mall-roof-${t.x}-${t.z}`}
-               position-x={(t.x + 0.5) * TILE_SIZE}
-               position-y={5.1}
-               position-z={(t.z + 0.5) * TILE_SIZE}
-               scale={[6, 0.2, 6]}
-               color={getColor("#be123c", t)} // Dark Red
-            />
-         ))}
+         {malls.map((t) => {
+           const rot = (t.rotation || 0) * (Math.PI / 2);
+           // Offset atrium towards front
+           const zOff = Math.cos(rot) * 3.6;
+           const xOff = Math.sin(rot) * 3.6;
+
+           return (
+            <React.Fragment key={`mall-detail-${t.x}-${t.z}`}>
+                {/* Roof */}
+                 <Instance 
+                    position-x={(t.x + 0.5) * TILE_SIZE}
+                    position-y={5.1}
+                    position-z={(t.z + 0.5) * TILE_SIZE}
+                    scale={[6, 0.2, 6]}
+                    rotation={getRot(t)}
+                    color={getColor("#be123c", t)} // Dark Red
+                />
+                {/* Atrium Entrance */}
+                <Instance 
+                    position-x={(t.x + 0.5) * TILE_SIZE + xOff}
+                    position-y={1.5}
+                    position-z={(t.z + 0.5) * TILE_SIZE + zOff}
+                    scale={[3, 3, 1]}
+                    rotation={getRot(t)}
+                    color={getColor("#bae6fd", t)} // Light Blue Glass
+                />
+            </React.Fragment>
+         )})}
       </Instances>
 
       {/* --- OFFICES --- */}
@@ -400,6 +474,7 @@ export const InstancedBuildings: React.FC = () => {
             key={`office-glass-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 6, t.z * TILE_SIZE + TILE_SIZE / 2]}
             scale={[3, 12, 3]}
+            rotation={getRot(t)}
             color={getColor("#3b82f6", t)} // Blue glass
           />
         ))}
@@ -409,12 +484,12 @@ export const InstancedBuildings: React.FC = () => {
           <Instance
             key={`office-frame-${t.x}-${t.z}`}
             position={[t.x * TILE_SIZE + TILE_SIZE / 2, 6, t.z * TILE_SIZE + TILE_SIZE / 2]}
-            scale={[3.1, 12, 0.5]} // Decorative frame
+            scale={[3.1, 12, 0.5]} // Decorative frame (rotated with building)
+            rotation={getRot(t)}
             color={getColor("#1e293b", t)} // Dark frame
           />
         ))}
       </Instances>
-
 
     </group>
   );

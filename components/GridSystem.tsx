@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCityStore } from '../store/useCityStore';
@@ -13,9 +13,22 @@ export const GridSystem: React.FC = () => {
   const activeTool = useCityStore((state) => state.activeTool);
   const addBuilding = useCityStore((state) => state.addBuilding);
   const removeBuilding = useCityStore((state) => state.removeBuilding);
+  const rotation = useCityStore((state) => state.rotation);
+  const setRotation = useCityStore((state) => state.setRotation);
 
   // Use State for rendering the Ghost Building
   const [hoveredTile, setHoveredTile] = useState<{ x: number, z: number } | null>(null);
+
+  // Keyboard Listener for Rotation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'r') {
+        setRotation((rotation + 1) % 4);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [rotation, setRotation]);
 
   // Handle Mouse Movement (Hover Effect)
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
@@ -53,7 +66,7 @@ export const GridSystem: React.FC = () => {
       if (activeTool === 'bulldozer') {
         removeBuilding(hoveredTile.x, hoveredTile.z);
       } else if (activeTool) {
-        addBuilding(hoveredTile.x, hoveredTile.z, activeTool);
+        addBuilding(hoveredTile.x, hoveredTile.z, activeTool, rotation);
       }
     }
   };
@@ -95,7 +108,7 @@ export const GridSystem: React.FC = () => {
         ]}>
             {activeTool && activeTool !== 'bulldozer' ? (
                 // 3D Ghost Building
-                <BuildingRenderer type={activeTool} isGhost />
+                <BuildingRenderer type={activeTool} rotation={rotation} isGhost />
             ) : (
                 // Simple Cursor for Inspection / Bulldozer
                 <mesh rotation={[-Math.PI / 2, 0, 0]}>

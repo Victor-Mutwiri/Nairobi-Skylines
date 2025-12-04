@@ -64,7 +64,6 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
       // Night Time Emissive Logic
       if (emissiveIntensity > 0) {
          // If it has natural emission (lights), use it
-         // Reduce intensity slightly if it's night to make it pop, or 0 if day (unless always on)
          const effectiveIntensity = isNight ? emissiveIntensity : (isUtility ? emissiveIntensity : 0);
          props.emissive = color;
          props.emissiveIntensity = effectiveIntensity;
@@ -76,9 +75,23 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
 
       return props;
   };
+
+  const GhostArrow = () => {
+    if (!isGhost) return null;
+    return (
+        <group position={[0, 0.1, 0]}>
+             {/* Arrow pointing +Z (Front) */}
+             <mesh position={[0, 0, 2.5]} rotation={[-Math.PI/2, 0, 0]}>
+                 <coneGeometry args={[0.5, 1, 4]} />
+                 <meshBasicMaterial color="#00ff00" transparent opacity={0.8} />
+             </mesh>
+        </group>
+    );
+  };
   
   switch (type) {
     // --- INSTANCED TYPES (Added for Ghost Preview) ---
+    // Note: InstancedBuildings.tsx renders the real ones. This is just for Ghost Mode visuals.
     case 'road':
         return (
              <group position={position} rotation={[0, rotationY, 0]}>
@@ -91,32 +104,53 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
     case 'runda_house':
         return (
             <group position={position} rotation={[0, rotationY, 0]}>
+                <GhostArrow />
+                {/* Main House */}
                 <mesh position={[0, 1, 0]}>
                    <boxGeometry args={[2.5, 2, 2.5]} />
                    <meshStandardMaterial {...getMatStyle("#f8fafc")} />
                 </mesh>
+                {/* Roof */}
                 <mesh position={[0, 2.5, 0]} rotation={[0, Math.PI / 4, 0]}>
                    <coneGeometry args={[2.2, 1.5, 4]} />
                    <meshStandardMaterial {...getMatStyle("#334155")} />
+                </mesh>
+                {/* Porch */}
+                <mesh position={[0, 0.5, 1.3]}>
+                   <boxGeometry args={[1.5, 0.2, 1]} />
+                   <meshStandardMaterial {...getMatStyle("#cbd5e1")} />
+                </mesh>
+                {/* Chimney */}
+                <mesh position={[0.8, 2.5, -0.5]}>
+                    <boxGeometry args={[0.4, 1, 0.4]} />
+                    <meshStandardMaterial {...getMatStyle("#94a3b8")} />
                 </mesh>
             </group>
         );
     case 'kiosk':
          return (
              <group position={position} rotation={[0, rotationY, 0]}>
+                 <GhostArrow />
                  <mesh position={[0, 0.75, 0]}>
                     <boxGeometry args={[1.5, 1.5, 1.5]} />
                     <meshStandardMaterial {...getMatStyle("#16a34a")} />
                  </mesh>
-                 <mesh position={[0, 1, 0]}>
-                    <boxGeometry args={[1.55, 0.3, 1.55]} />
+                 {/* Slanted Awning */}
+                 <mesh position={[0, 1.5, 0.8]} rotation={[0.4, 0, 0]}>
+                    <boxGeometry args={[1.6, 0.1, 1]} />
                     <meshStandardMaterial {...getMatStyle("#dc2626")} />
+                 </mesh>
+                 {/* Counter */}
+                 <mesh position={[0, 0.5, 0.8]}>
+                    <boxGeometry args={[1.4, 0.5, 0.4]} />
+                    <meshStandardMaterial {...getMatStyle("#78350f")} />
                  </mesh>
              </group>
          );
     case 'apartment':
         return (
             <group position={position} rotation={[0, rotationY, 0]}>
+                <GhostArrow />
                 <mesh position={[0, 3, 0]}>
                    <boxGeometry args={[2.8, 6, 2.8]} />
                    <meshStandardMaterial {...getMatStyle("#fef3c7")} />
@@ -124,6 +158,49 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
                 <mesh position={[0, 6.1, 0]}>
                    <boxGeometry args={[3, 0.2, 3]} />
                    <meshStandardMaterial {...getMatStyle("#78350f")} />
+                </mesh>
+                {/* Balconies */}
+                 <mesh position={[0, 4, 1.5]}>
+                   <boxGeometry args={[2, 0.2, 0.4]} />
+                   <meshStandardMaterial {...getMatStyle("#b45309")} />
+                </mesh>
+                <mesh position={[0, 2, 1.5]}>
+                   <boxGeometry args={[2, 0.2, 0.4]} />
+                   <meshStandardMaterial {...getMatStyle("#b45309")} />
+                </mesh>
+            </group>
+        );
+    case 'mall':
+        return (
+            <group position={position} rotation={[0, rotationY, 0]}>
+                <GhostArrow />
+                <mesh position={[0, 2.5, 0]}>
+                   <boxGeometry args={[7, 5, 7]} />
+                   <meshStandardMaterial {...getMatStyle("#fca5a5")} />
+                </mesh>
+                {/* Atrium Entrance */}
+                 <mesh position={[0, 1.5, 3.6]}>
+                   <boxGeometry args={[3, 3, 1]} />
+                   <meshStandardMaterial {...getMatStyle("#bae6fd")} />
+                </mesh>
+            </group>
+        );
+     case 'office':
+        return (
+            <group position={position} rotation={[0, rotationY, 0]}>
+                <GhostArrow />
+                <mesh position={[0, 6, 0]}>
+                   <boxGeometry args={[3, 12, 3]} />
+                   <meshStandardMaterial {...getMatStyle("#3b82f6")} />
+                </mesh>
+                {/* Vertical Strips */}
+                <mesh position={[1.55, 6, 0]}>
+                   <boxGeometry args={[0.2, 12, 0.5]} />
+                   <meshStandardMaterial {...getMatStyle("#1e293b")} />
+                </mesh>
+                 <mesh position={[-1.55, 6, 0]}>
+                   <boxGeometry args={[0.2, 12, 0.5]} />
+                   <meshStandardMaterial {...getMatStyle("#1e293b")} />
                 </mesh>
             </group>
         );
@@ -408,8 +485,6 @@ export const BuildingRenderer: React.FC<BuildingRendererProps> = React.memo(({
     case 'nbk_tower':
         return (
           // Visuals offset to center over 2x2 grid. 
-          // 2x2 means total width 8 units. Center is +2, +2 from anchor corner.
-          // Since this renderer is placed at center of Anchor Tile (0,0 relative), we need to shift it x+2, z+2
           <group position={[position[0] + 2, position[1], position[2] + 2]} rotation={[0, rotationY, 0]}>
             {/* Main Tower Block */}
             <mesh position={[0, 6, 0]} castShadow receiveShadow>

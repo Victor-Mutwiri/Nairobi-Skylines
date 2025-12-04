@@ -96,10 +96,12 @@ export interface UISlice {
   activeEvent: EventType;
   isPowerOverlay: boolean;
   showBudget: boolean;
+  rotation: number; // 0, 1, 2, 3
 
   setActiveTool: (tool: ToolType | null) => void;
   togglePowerOverlay: () => void;
   setShowBudget: (show: boolean) => void;
+  setRotation: (rotation: number) => void;
 }
 
 export interface GridSlice {
@@ -110,7 +112,7 @@ export interface GridSlice {
   powerDemand: number;
   trafficDensity: number;
 
-  addBuilding: (x: number, z: number, type: BuildingType) => void;
+  addBuilding: (x: number, z: number, type: BuildingType, rotation: number) => void;
   removeBuilding: (x: number, z: number) => void;
   runGameTick: () => number; // Returns net income
   saveGame: () => void;

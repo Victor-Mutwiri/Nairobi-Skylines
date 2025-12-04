@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle, Zap, Trash2, Hammer, Car } from 'lucide-react';
+import { Loader2, ArrowLeft, Settings, Pause, Smile, Users, Coins, ShieldAlert, Briefcase, Save, CheckCircle, Zap, Trash2, Hammer, Car, RotateCw } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import GameCanvas from '../components/GameCanvas';
 import TenderModal from '../components/TenderModal';
@@ -37,6 +38,8 @@ const GameScreen: React.FC = () => {
   const saveGame = useCityStore((state) => state.saveGame);
   const saveHighScore = useCityStore((state) => state.saveHighScore);
   const gameWon = useCityStore((state) => state.gameWon);
+  const rotation = useCityStore((state) => state.rotation);
+  const setRotation = useCityStore((state) => state.setRotation);
 
   const steps = [
     "Initializing Low Poly Engine...",
@@ -292,8 +295,17 @@ const GameScreen: React.FC = () => {
           {/* Bottom Bar: Building Tools */}
           <div className="flex flex-col gap-4 pointer-events-auto">
              
-             {/* Power Overlay Toggle */}
-             <div className="self-end">
+             {/* Power Overlay Toggle & Rotation */}
+             <div className="self-end flex gap-2">
+                <Button 
+                    size="sm" 
+                    onClick={() => setRotation((rotation + 1) % 4)}
+                    className="rounded-full px-4 shadow-xl bg-slate-800 border border-slate-600 text-slate-300"
+                >
+                    <RotateCw className="w-4 h-4 mr-2" />
+                    Rotate (R)
+                </Button>
+
                 <Button 
                     size="sm" 
                     onClick={togglePowerOverlay}
@@ -318,12 +330,12 @@ const GameScreen: React.FC = () => {
                 </div>
              )}
 
-             <div className="flex justify-center items-end gap-3 w-full overflow-x-auto pb-2 scrollbar-hide">
+             <div className="flex justify-start items-end gap-3 w-full overflow-x-auto pb-2 px-2 scrollbar-thin scrollbar-thumb-nairobi-yellow scrollbar-track-slate-800">
                 <div className="bg-slate-900/90 backdrop-blur border border-slate-700 p-2 rounded-2xl shadow-2xl flex gap-2">
                     <Button 
                         size="sm" 
                         variant="primary" 
-                        className="bg-red-600 hover:bg-red-700 border-none text-white shadow-none h-12 w-12 p-0 flex items-center justify-center rounded-xl"
+                        className="bg-red-600 hover:bg-red-700 border-none text-white shadow-none h-12 w-12 p-0 flex items-center justify-center rounded-xl min-w-[3rem]"
                         onClick={() => navigate('/')}
                         title="Exit Game"
                     >

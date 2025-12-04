@@ -9,17 +9,21 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
   powerDemand: 0,
   trafficDensity: 0,
 
-  addBuilding: (x, z, type) => set((state) => {
+  addBuilding: (x, z, type, rotation) => set((state) => {
     // 1. Check Cost
     const config = BUILDING_COSTS[type];
     if (state.money < config.cost) return state;
 
     // 2. Check Dimensions and Availability
-    const width = config.width || 1;
-    const depth = config.depth || 1;
+    // Rotate dimensions if rotation is 1 or 3 (90 or 270 degrees)
+    const isRotated = rotation % 2 !== 0;
+    const width = isRotated ? (config.depth || 1) : (config.width || 1);
+    const depth = isRotated ? (config.width || 1) : (config.depth || 1);
+    
     const tilesToOccupy: string[] = [];
 
     // Grid boundary check and Occupancy check
+    // We assume (x,z) is the top-left anchor (or pivot)
     for (let dx = 0; dx < width; dx++) {
       for (let dz = 0; dz < depth; dz++) {
         const checkX = x + dx;
@@ -45,7 +49,7 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
         type, 
         x, 
         z, 
-        rotation: 0,
+        rotation: rotation,
         hasRoadAccess: true, // Optimistic init, verified in next tick
         isPowered: true 
     };
@@ -58,7 +62,7 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
                 type: 'reserved', 
                 x: x + dx, 
                 z: z + dz, 
-                rotation: 0,
+                rotation: rotation,
                 parentX: x,
                 parentZ: z
             };
@@ -99,8 +103,13 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
 
     // Handle Multi-tile Removal
     const config = BUILDING_COSTS[tile.type];
-    const width = config.width || 1;
-    const depth = config.depth || 1;
+    // Need to account for rotation when calculating occupied area for removal?
+    // Actually, we just need to find all reserved tiles pointing to this parent.
+    // Simpler approach: Scan grid or re-calculate dimensions based on stored rotation.
+    
+    const isRotated = tile.rotation % 2 !== 0;
+    const width = isRotated ? (config.depth || 1) : (config.width || 1);
+    const depth = isRotated ? (config.width || 1) : (config.depth || 1);
 
     const newTiles = { ...state.tiles };
 
@@ -212,8 +221,10 @@ export const createGridSlice: CitySlice<GridSlice> = (set, get) => ({
       if (tile.type === 'reserved') return;
 
       const config = BUILDING_COSTS[tile.type];
-      const width = config.width || 1;
-      const depth = config.depth || 1;
+      // Account for rotation
+      const isRotated = tile.rotation % 2 !== 0;
+      const width = isRotated ? (config.depth || 1) : (config.width || 1);
+      const depth = isRotated ? (config.width || 1) : (config.depth || 1);
       
       let hasRoadAccess = false;
       let hasPowerAccess = false;
